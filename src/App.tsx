@@ -42,6 +42,7 @@ function App() {
 
   return (
     <main className="container">
+      <img src="/logo.png" alt="Blue Pearls Logo" />
       <h1>Blue Pearls Desktop</h1>
     </main>
   );
