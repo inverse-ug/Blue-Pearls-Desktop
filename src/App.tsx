@@ -42,10 +42,10 @@ function App() {
           });
           await relaunch();
         } else {
-          setStatus("No update available");
+          setStatus("Up to date");
         }
       } else {
-        setStatus("No update available");
+        setStatus("Up to date");
       }
     } catch (error) {
       setStatus(`Error: ${error}`);
@@ -60,6 +60,7 @@ function App() {
         style={{ width: "120px", height: "120px", objectFit: "contain" }}
       />
       <h1>Blue Pearls Desktop</h1>
+      <p>Welcome to Blue Pearls Desktop. We're glad you're here.</p>
       <p>{status}</p>
     </main>
   );
