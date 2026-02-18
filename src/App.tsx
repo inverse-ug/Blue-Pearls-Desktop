@@ -16,7 +16,7 @@ function App() {
       const update = await check();
       if (update) {
         const shouldUpdate = await ask(
-          `Version ${update.version} is available.\n\n${update.body}\n\nWould you like to update now?`,
+          `A newer version is Available.\n\n${update.body}\n\nWould you like to update now?`,
           {
             title: "Update Available",
             kind: "info",
@@ -48,7 +48,7 @@ function App() {
         setStatus("Up to date");
       }
     } catch (error) {
-      setStatus(`Error: ${error}`);
+      setStatus(``);
     }
   }
 
