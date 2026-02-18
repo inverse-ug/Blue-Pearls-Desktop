@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { ask } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 
 function App() {
@@ -14,11 +15,18 @@ function App() {
     try {
       const update = await check();
       if (update) {
-        setStatus(`Update available: ${update.version}`);
-        const shouldUpdate = confirm(
-          `A new version (${update.version}) of Blue Pearls Desktop is available!\n\n${update.body}\n\nWould you like to update now?`,
+        const shouldUpdate = await ask(
+          `Version ${update.version} is available.\n\n${update.body}\n\nWould you like to update now?`,
+          {
+            title: "Update Available",
+            kind: "info",
+            okLabel: "Update",
+            cancelLabel: "Later",
+          },
         );
+
         if (shouldUpdate) {
+          setStatus("Downloading update...");
           await update.downloadAndInstall((event) => {
             switch (event.event) {
               case "Started":
@@ -33,6 +41,8 @@ function App() {
             }
           });
           await relaunch();
+        } else {
+          setStatus("No update available");
         }
       } else {
         setStatus("No update available");
