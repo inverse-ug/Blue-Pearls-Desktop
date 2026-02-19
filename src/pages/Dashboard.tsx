@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -84,7 +84,7 @@ const GREETINGS = {
   ],
 };
 
-function buildGreeting(name = "Andrew"): string {
+function buildGreeting(name: string): string {
   const h = new Date().getHours();
   const pool =
     h >= 5 && h < 12
@@ -94,7 +94,7 @@ function buildGreeting(name = "Andrew"): string {
         : h >= 17 && h < 21
           ? GREETINGS.evening
           : GREETINGS.night;
-  // Use a fresh random each time this function is called (i.e. on every mount/refresh)
+
   const template = pool[Math.floor(Math.random() * pool.length)];
   return template.replace("{name}", name);
 }
@@ -135,7 +135,7 @@ const recentJobs = [
     client: "Aga Khan Distributors",
     route: "Kampala → Nairobi",
     driver: "Moses Okello",
-    amount: "+$4,800",
+    amount: "+UGX 4,800k",
     status: "Delivered",
     type: "in",
   },
@@ -143,7 +143,7 @@ const recentJobs = [
     client: "MTN Uganda",
     route: "Kampala → Mombasa",
     driver: "David Ssemakula",
-    amount: "+$7,200",
+    amount: "+UGX 7,200k",
     status: "In Transit",
     type: "in",
   },
@@ -151,7 +151,7 @@ const recentJobs = [
     client: "Fuel & Lubricants Ltd",
     route: "Jinja → Kampala",
     driver: "Peter Mugisha",
-    amount: "-$1,340",
+    amount: "-UGX 1,340k",
     status: "Paid",
     type: "out",
   },
@@ -159,7 +159,7 @@ const recentJobs = [
     client: "Stanbic Logistics",
     route: "Kampala → Dar es Salaam",
     driver: "Joseph Katende",
-    amount: "+$9,500",
+    amount: "+UGX 9,500k",
     status: "Delivered",
     type: "in",
   },
@@ -167,7 +167,7 @@ const recentJobs = [
     client: "Vehicle Maintenance",
     route: "Fleet Service — Unit 07",
     driver: "Workshop",
-    amount: "-$2,100",
+    amount: "-UGX 2,100k",
     status: "Paid",
     type: "out",
   },
@@ -223,9 +223,23 @@ function DonutChart({
 
 // ── Dashboard page ─────────────────────────────────────────────────────────
 export default function Dashboard() {
-  // useState initializer runs exactly once per mount.
-  // Layout's refreshKey prop forces a full remount, so this re-randomises on refresh.
-  const [greeting] = useState(() => buildGreeting());
+  const [greeting, setGreeting] = useState("");
+
+  useEffect(() => {
+    // Get user from local storage
+    const storedUser = localStorage.getItem("bp_user");
+    let name = "there";
+    if (storedUser) {
+      try {
+        const userObj = JSON.parse(storedUser);
+        // Take first name or fallback to full name
+        name = userObj.name?.split(" ")[0] || userObj.name || "there";
+      } catch (e) {
+        console.error("Failed to parse user data");
+      }
+    }
+    setGreeting(buildGreeting(name));
+  }, []);
 
   return (
     <div
@@ -258,7 +272,7 @@ export default function Dashboard() {
             {[
               {
                 label: "Total Revenue",
-                value: "$193,000",
+                value: "UGX 193M",
                 change: "+8.4%",
                 up: true,
                 icon: Wallet,
@@ -446,7 +460,7 @@ export default function Dashboard() {
                       fontSize: 11,
                     }}
                     formatter={(v: number | undefined) => [
-                      `$${((v ?? 0) / 1000).toFixed(0)}k`,
+                      `UGX ${((v ?? 0) / 1000).toFixed(0)}k`,
                     ]}
                   />
                   <Area
@@ -551,7 +565,7 @@ export default function Dashboard() {
                     {job.driver}
                   </p>
                   <p
-                    className="text-sm font-semibold w-20 text-right flex-shrink-0"
+                    className="text-sm font-semibold w-24 text-right flex-shrink-0"
                     style={{ color: job.type === "in" ? C.green : C.red }}>
                     {job.amount}
                   </p>
@@ -667,7 +681,7 @@ export default function Dashboard() {
               label: "Invoice Collection",
               percent: 68,
               color: C.red,
-              value: "$131k / $193k",
+              value: "UGX 131M / 193M",
               bg: `${C.red}12`,
             },
           ].map((kpi, i) => (
