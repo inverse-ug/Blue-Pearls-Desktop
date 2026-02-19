@@ -1,0 +1,2198 @@
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { toast } from "sonner";
+import {
+  Search,
+  Plus,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Filter,
+  Loader2,
+  UserCircle2,
+  ShieldCheck,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  Link2,
+  Unlink,
+  Send,
+  Lock,
+  Mail,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+  Key,
+  MapPin,
+  Building2,
+} from "lucide-react";
+import { C } from "../layouts/Layout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+// ── Configuration ─────────────────────────────────────────────────────────────
+const API_URL = "https://blue-pearls-server.vercel.app";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export type Role =
+  | "IMPLANT"
+  | "MANAGER"
+  | "SUPER_ADMIN"
+  | "PSV_COORDINATOR"
+  | "TRUCK_COORDINATOR"
+  | "DRIVER"
+  | "SECURITY_GUARD"
+  | "FUEL_AGENT";
+
+export interface Account {
+  id: number;
+  name: string;
+  email: string;
+  role: Role;
+  staffId?: number | null;
+  staffName?: string | null;
+  staffPlacementId?: number | null;
+  placementName?: string | null;
+  placementAddress?: string | null;
+  avatarUrl?: string | null;
+  createdAt: string;
+}
+
+export interface StaffOption {
+  id: number;
+  name: string;
+  officialEmail?: string | null;
+  avatarUrl?: string | null;
+  placementId?: number | null;
+  placementName?: string | null;
+}
+
+export interface Client {
+  id: number;
+  name: string;
+  contactPerson?: string | null;
+  email?: string | null;
+  phone: string;
+  address?: string | null;
+  tinNumber?: string | null;
+}
+
+export const ROLE_LABELS: Record<Role, string> = {
+  IMPLANT: "Implant",
+  MANAGER: "Manager",
+  SUPER_ADMIN: "Super Admin",
+  PSV_COORDINATOR: "PSV Coordinator",
+  TRUCK_COORDINATOR: "Truck Coordinator",
+  DRIVER: "Driver",
+  SECURITY_GUARD: "Security Guard",
+  FUEL_AGENT: "Fuel Agent",
+};
+
+export const ROLE_COLORS: Record<Role, { color: string; bg: string }> = {
+  SUPER_ADMIN: { color: "#7A80F0", bg: "#7A80F018" },
+  MANAGER: { color: "#1e6ea6", bg: "#1e6ea618" },
+  IMPLANT: { color: "#8CA573", bg: "#8CA57318" },
+  PSV_COORDINATOR: { color: "#059669", bg: "#05966918" },
+  TRUCK_COORDINATOR: { color: "#b8922a", bg: "#E1BA5822" },
+  DRIVER: { color: "#9E9E9E", bg: "#9E9E9E18" },
+  SECURITY_GUARD: { color: "#EA7957", bg: "#EA795718" },
+  FUEL_AGENT: { color: "#0891b2", bg: "#0891b218" },
+};
+
+export const ALL_ROLES: Role[] = [
+  "IMPLANT",
+  "MANAGER",
+  "SUPER_ADMIN",
+  "PSV_COORDINATOR",
+  "TRUCK_COORDINATOR",
+  "DRIVER",
+  "SECURITY_GUARD",
+  "FUEL_AGENT",
+];
+
+type SortKey = "name" | "email" | "role" | "placement" | "createdAt";
+type SortDir = "asc" | "desc";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+const AVATAR_COLORS = [
+  "#1a3a5c",
+  C.blue,
+  C.green,
+  "#8B5CF6",
+  "#0891b2",
+  "#059669",
+];
+function avatarColor(id: number) {
+  return AVATAR_COLORS[id % AVATAR_COLORS.length];
+}
+
+function generatePassword(length = 12): string {
+  const chars =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*";
+  return Array.from({ length }, () =>
+    chars.charAt(Math.floor(Math.random() * chars.length)),
+  ).join("");
+}
+
+// ── Zod Schema ────────────────────────────────────────────────────────────────
+
+const accountSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().min(1, "Email is required").email("Enter a valid email"),
+  role: z.enum([
+    "IMPLANT",
+    "MANAGER",
+    "SUPER_ADMIN",
+    "PSV_COORDINATOR",
+    "TRUCK_COORDINATOR",
+    "DRIVER",
+    "SECURITY_GUARD",
+    "FUEL_AGENT",
+  ]),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  staffId: z.number().nullable().optional(),
+  placementId: z.number().nullable().optional(),
+  sendCredentials: z.boolean().default(false),
+});
+
+const editAccountSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().min(1, "Email is required").email("Enter a valid email"),
+  role: z.enum([
+    "IMPLANT",
+    "MANAGER",
+    "SUPER_ADMIN",
+    "PSV_COORDINATOR",
+    "TRUCK_COORDINATOR",
+    "DRIVER",
+    "SECURITY_GUARD",
+    "FUEL_AGENT",
+  ]),
+  staffId: z.number().nullable().optional(),
+  placementId: z.number().nullable().optional(),
+  password: z
+    .string()
+    .min(6, "Password must be at least 6 characters")
+    .optional()
+    .or(z.literal("")),
+  sendCredentials: z.boolean().default(false),
+});
+
+type AccountFormData = z.infer<typeof accountSchema>;
+type EditAccountFormData = z.infer<typeof editAccountSchema>;
+
+// ── Sort Header Component ──────────────────────────────────────────────────────
+
+function SortHeader({
+  label,
+  sortKey,
+  current,
+  dir,
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  current: SortKey;
+  dir: SortDir;
+  onSort: (k: SortKey) => void;
+}) {
+  const active = current === sortKey;
+  return (
+    <button
+      onClick={() => onSort(sortKey)}
+      className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest transition-colors"
+      style={{ color: active ? C.dark : C.muted }}>
+      {label}
+      <span className="opacity-60">
+        {active ? (
+          dir === "asc" ? (
+            <ChevronUp size={11} />
+          ) : (
+            <ChevronDown size={11} />
+          )
+        ) : (
+          <ChevronsUpDown size={11} />
+        )}
+      </span>
+    </button>
+  );
+}
+
+// ── Account Sheet (Create) ────────────────────────────────────────────────────
+
+function CreateAccountSheet({
+  open,
+  onClose,
+  onSave,
+  staffOptions,
+  clients,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSave: (data: AccountFormData) => Promise<void>;
+  staffOptions: StaffOption[];
+  clients: Client[];
+}) {
+  const [isSaving, setIsSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [linkedStaff, setLinkedStaff] = useState<StaffOption | null>(null);
+  const [staffSearch, setStaffSearch] = useState("");
+  const [showStaffPicker, setShowStaffPicker] = useState(false);
+  const [selectedPlacement, setSelectedPlacement] = useState<Client | null>(
+    null,
+  );
+  const [showPlacementPicker, setShowPlacementPicker] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
+
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<AccountFormData>({
+    resolver: zodResolver(accountSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      role: "DRIVER",
+      password: "",
+      staffId: null,
+      placementId: null,
+      sendCredentials: false,
+    },
+  });
+
+  const selectedRole = watch("role");
+  const sendCredentials = watch("sendCredentials");
+
+  useEffect(() => {
+    // Reset placement when role changes from IMPLANT to something else
+    if (selectedRole !== "IMPLANT") {
+      setValue("placementId", null);
+      setSelectedPlacement(null);
+    }
+  }, [selectedRole, setValue]);
+
+  function handleClose() {
+    reset();
+    setLinkedStaff(null);
+    setStaffSearch("");
+    setShowStaffPicker(false);
+    setSelectedPlacement(null);
+    setShowPlacementPicker(false);
+    setClientSearch("");
+    onClose();
+  }
+
+  function handleLinkStaff(s: StaffOption) {
+    setLinkedStaff(s);
+    setValue("staffId", s.id);
+    setValue("name", s.name);
+    if (s.officialEmail) setValue("email", s.officialEmail);
+    if (s.placementId) {
+      const client = clients.find((c) => c.id === s.placementId);
+      if (client) {
+        setSelectedPlacement(client);
+        setValue("placementId", client.id);
+      }
+    }
+    setShowStaffPicker(false);
+    setStaffSearch("");
+  }
+
+  function handleUnlink() {
+    setLinkedStaff(null);
+    setValue("staffId", null);
+    setValue("name", "");
+    setValue("email", "");
+    setValue("placementId", null);
+    setSelectedPlacement(null);
+  }
+
+  function handleSelectPlacement(client: Client) {
+    setSelectedPlacement(client);
+    setValue("placementId", client.id);
+    setShowPlacementPicker(false);
+    setClientSearch("");
+  }
+
+  function handleRemovePlacement() {
+    setSelectedPlacement(null);
+    setValue("placementId", null);
+  }
+
+  function handleAutoGenerate() {
+    const pwd = generatePassword();
+    setValue("password", pwd);
+    setShowPassword(true);
+  }
+
+  async function onSubmit(data: AccountFormData) {
+    setIsSaving(true);
+    try {
+      // If role is IMPLANT, ensure placement is included
+      if (data.role === "IMPLANT" && !data.placementId) {
+        toast.error("Placement is required for Implant role");
+        setIsSaving(false);
+        return;
+      }
+      await onSave(data);
+      handleClose();
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const filteredStaff = staffOptions.filter((s) =>
+    s.name.toLowerCase().includes(staffSearch.toLowerCase()),
+  );
+
+  const filteredClients = clients.filter(
+    (c) =>
+      c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
+      c.address?.toLowerCase().includes(clientSearch.toLowerCase()) ||
+      false ||
+      c.contactPerson?.toLowerCase().includes(clientSearch.toLowerCase()) ||
+      false,
+  );
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && !isSaving && handleClose()}>
+      <SheetContent
+        className="w-[460px] sm:w-[520px] overflow-y-auto !p-0"
+        style={{ fontFamily: "'Inter', sans-serif" }}>
+        <div
+          className="px-7 py-6"
+          style={{ borderBottom: `1px solid ${C.border}` }}>
+          <SheetTitle className="text-lg font-bold" style={{ color: C.dark }}>
+            Create Account
+          </SheetTitle>
+          <SheetDescription className="mt-1 text-sm" style={{ color: C.muted }}>
+            Set up a new user account with login credentials.
+          </SheetDescription>
+        </div>
+
+        <form onSubmit={handleSubmit(onSubmit)} noValidate>
+          <div className="px-7 py-6 space-y-5">
+            {/* Link Staff Section */}
+            <div
+              className="rounded-2xl p-4"
+              style={{
+                background: "#F5F4EF",
+                border: `1px solid ${C.border}`,
+              }}>
+              <p
+                className="text-[10px] font-semibold uppercase tracking-widest mb-3"
+                style={{ color: C.muted }}>
+                Step 1 — Link a Staff Member (optional)
+              </p>
+
+              {linkedStaff ? (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                      style={{ background: avatarColor(linkedStaff.id) }}>
+                      {getInitials(linkedStaff.name)}
+                    </div>
+                    <div>
+                      <p
+                        className="text-sm font-semibold"
+                        style={{ color: C.dark }}>
+                        {linkedStaff.name}
+                      </p>
+                      <p className="text-[11px]" style={{ color: C.muted }}>
+                        Staff ID #{String(linkedStaff.id).padStart(4, "0")}
+                      </p>
+                      {linkedStaff.placementName && (
+                        <p
+                          className="text-[10px] flex items-center gap-1 mt-0.5"
+                          style={{ color: C.muted }}>
+                          <MapPin size={8} /> Current:{" "}
+                          {linkedStaff.placementName}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleUnlink}
+                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-red-50"
+                    style={{ color: C.red }}>
+                    <Unlink size={12} /> Unlink
+                  </button>
+                </div>
+              ) : (
+                <div className="relative">
+                  {showStaffPicker ? (
+                    <div>
+                      <div className="relative mb-2">
+                        <Search
+                          size={13}
+                          className="absolute left-3 top-1/2 -translate-y-1/2"
+                          style={{ color: C.muted }}
+                        />
+                        <Input
+                          autoFocus
+                          value={staffSearch}
+                          onChange={(e) => setStaffSearch(e.target.value)}
+                          placeholder="Search staff by name…"
+                          className="pl-9 h-9 rounded-xl text-sm bg-white"
+                        />
+                      </div>
+                      <div
+                        className="rounded-xl overflow-hidden max-h-44 overflow-y-auto"
+                        style={{
+                          background: "#fff",
+                          border: `1px solid ${C.border}`,
+                        }}>
+                        {filteredStaff.length === 0 ? (
+                          <p
+                            className="text-xs text-center py-6"
+                            style={{ color: C.muted }}>
+                            No staff found
+                          </p>
+                        ) : (
+                          filteredStaff.map((s) => (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() => handleLinkStaff(s)}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[#F5F4EF] text-left"
+                              style={{
+                                borderBottom: `1px solid ${C.border}`,
+                              }}>
+                              <div
+                                className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                                style={{ background: avatarColor(s.id) }}>
+                                {getInitials(s.name)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p
+                                  className="text-sm font-medium truncate"
+                                  style={{ color: C.dark }}>
+                                  {s.name}
+                                </p>
+                                {s.placementName && (
+                                  <p
+                                    className="text-[10px] flex items-center gap-1"
+                                    style={{ color: C.muted }}>
+                                    <MapPin size={8} /> {s.placementName}
+                                  </p>
+                                )}
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowStaffPicker(false)}
+                        className="mt-2 text-xs font-medium"
+                        style={{ color: C.muted }}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowStaffPicker(true)}
+                      className="w-full flex items-center gap-2 justify-center h-10 rounded-xl text-sm font-medium transition-colors hover:bg-white border-dashed border-2"
+                      style={{
+                        color: C.muted,
+                        borderColor: C.border,
+                      }}>
+                      <Link2 size={14} /> Link a Staff Member
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Account Details Section */}
+            <div>
+              <p
+                className="text-[10px] font-semibold uppercase tracking-widest mb-3"
+                style={{ color: C.muted }}>
+                Step 2 — Account Details
+              </p>
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label
+                    className="text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: C.muted }}>
+                    Full Name *
+                  </Label>
+                  <Controller
+                    name="name"
+                    control={control}
+                    render={({ field }) => (
+                      <Input
+                        {...field}
+                        placeholder="e.g. Moses Okello"
+                        className="h-10 rounded-xl text-sm"
+                        readOnly={!!linkedStaff}
+                        style={
+                          linkedStaff
+                            ? { background: "#F5F4EF", color: C.muted }
+                            : {}
+                        }
+                      />
+                    )}
+                  />
+                  {errors.name && (
+                    <p className="text-xs text-red-500">
+                      {errors.name.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label
+                    className="text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: C.muted }}>
+                    Email Address *
+                  </Label>
+                  <div className="relative">
+                    <Mail
+                      size={14}
+                      className="absolute left-3 top-1/2 -translate-y-1/2"
+                      style={{ color: C.muted }}
+                    />
+                    <Controller
+                      name="email"
+                      control={control}
+                      render={({ field }) => (
+                        <Input
+                          {...field}
+                          type="email"
+                          placeholder="user@bluepearls.co.ug"
+                          className="h-10 rounded-xl text-sm pl-9"
+                          readOnly={
+                            !!linkedStaff && !!linkedStaff.officialEmail
+                          }
+                          style={
+                            linkedStaff && linkedStaff.officialEmail
+                              ? { background: "#F5F4EF", color: C.muted }
+                              : {}
+                          }
+                        />
+                      )}
+                    />
+                  </div>
+                  {errors.email && (
+                    <p className="text-xs text-red-500">
+                      {errors.email.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label
+                    className="text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: C.muted }}>
+                    Role *
+                  </Label>
+                  <Controller
+                    name="role"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}>
+                        <SelectTrigger className="h-10 rounded-xl text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ALL_ROLES.map((r) => (
+                            <SelectItem key={r} value={r}>
+                              {ROLE_LABELS[r]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+
+                {/* Placement Section - Only shown for IMPLANT role */}
+                {selectedRole === "IMPLANT" && (
+                  <div
+                    className="rounded-2xl p-4 mt-2"
+                    style={{
+                      background: "#F5F4EF",
+                      border: `1px solid ${C.border}`,
+                    }}>
+                    <p
+                      className="text-[10px] font-semibold uppercase tracking-widest mb-3 flex items-center gap-1"
+                      style={{ color: C.muted }}>
+                      <MapPin size={12} /> Step 2b — Placement Location *
+                    </p>
+
+                    {selectedPlacement ? (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                            style={{ background: `${C.blue}18` }}>
+                            <Building2 size={16} style={{ color: C.blue }} />
+                          </div>
+                          <div>
+                            <p
+                              className="text-sm font-semibold"
+                              style={{ color: C.dark }}>
+                              {selectedPlacement.name}
+                            </p>
+                            {selectedPlacement.address && (
+                              <p
+                                className="text-[10px]"
+                                style={{ color: C.muted }}>
+                                {selectedPlacement.address}
+                              </p>
+                            )}
+                            {selectedPlacement.contactPerson && (
+                              <p
+                                className="text-[10px] flex items-center gap-1 mt-0.5"
+                                style={{ color: C.muted }}>
+                                <UserCircle2 size={8} />{" "}
+                                {selectedPlacement.contactPerson}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemovePlacement}
+                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-red-50"
+                          style={{ color: C.red }}>
+                          <Trash2 size={12} /> Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        {showPlacementPicker ? (
+                          <div>
+                            <div className="relative mb-2">
+                              <Search
+                                size={13}
+                                className="absolute left-3 top-1/2 -translate-y-1/2"
+                                style={{ color: C.muted }}
+                              />
+                              <Input
+                                autoFocus
+                                value={clientSearch}
+                                onChange={(e) =>
+                                  setClientSearch(e.target.value)
+                                }
+                                placeholder="Search clients…"
+                                className="pl-9 h-9 rounded-xl text-sm bg-white"
+                              />
+                            </div>
+                            <div
+                              className="rounded-xl overflow-hidden max-h-60 overflow-y-auto"
+                              style={{
+                                background: "#fff",
+                                border: `1px solid ${C.border}`,
+                              }}>
+                              {filteredClients.length === 0 ? (
+                                <p
+                                  className="text-xs text-center py-6"
+                                  style={{ color: C.muted }}>
+                                  No clients found
+                                </p>
+                              ) : (
+                                filteredClients.map((client) => (
+                                  <button
+                                    key={client.id}
+                                    type="button"
+                                    onClick={() =>
+                                      handleSelectPlacement(client)
+                                    }
+                                    className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#F5F4EF] text-left"
+                                    style={{
+                                      borderBottom: `1px solid ${C.border}`,
+                                    }}>
+                                    <div
+                                      className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                                      style={{ background: `${C.green}18` }}>
+                                      <Building2
+                                        size={12}
+                                        style={{ color: C.green }}
+                                      />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p
+                                        className="text-sm font-medium truncate"
+                                        style={{ color: C.dark }}>
+                                        {client.name}
+                                      </p>
+                                      {client.address && (
+                                        <p
+                                          className="text-[10px] truncate"
+                                          style={{ color: C.muted }}>
+                                          {client.address}
+                                        </p>
+                                      )}
+                                      {client.contactPerson && (
+                                        <p
+                                          className="text-[10px] truncate"
+                                          style={{ color: C.muted }}>
+                                          Contact: {client.contactPerson}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowPlacementPicker(false)}
+                              className="mt-2 text-xs font-medium"
+                              style={{ color: C.muted }}>
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setShowPlacementPicker(true)}
+                            className="w-full flex items-center gap-2 justify-center h-10 rounded-xl text-sm font-medium transition-colors hover:bg-white border-dashed border-2"
+                            style={{
+                              color: C.muted,
+                              borderColor: C.border,
+                            }}>
+                            <MapPin size={14} /> Select Client Location
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {errors.placementId && (
+                      <p className="text-xs text-red-500 mt-2">
+                        {errors.placementId.message}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Password Section */}
+            <div>
+              <p
+                className="text-[10px] font-semibold uppercase tracking-widest mb-3"
+                style={{ color: C.muted }}>
+                Step 3 — Set Password
+              </p>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label
+                      className="text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: C.muted }}>
+                      Password *
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={handleAutoGenerate}
+                      className="flex items-center gap-1 text-xs font-medium transition-colors"
+                      style={{ color: C.blue }}>
+                      <RefreshCw size={11} /> Auto-generate
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Lock
+                      size={14}
+                      className="absolute left-3 top-1/2 -translate-y-1/2"
+                      style={{ color: C.muted }}
+                    />
+                    <Controller
+                      name="password"
+                      control={control}
+                      render={({ field }) => (
+                        <Input
+                          {...field}
+                          type={showPassword ? "text" : "password"}
+                          placeholder="••••••••••••"
+                          className="h-10 rounded-xl text-sm pl-9 pr-10 font-mono"
+                        />
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
+                      style={{ color: C.muted }}
+                      tabIndex={-1}>
+                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Send Credentials Toggle */}
+                <Controller
+                  name="sendCredentials"
+                  control={control}
+                  render={({ field }) => (
+                    <button
+                      type="button"
+                      onClick={() => field.onChange(!field.value)}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors"
+                      style={{
+                        background: field.value ? `${C.green}12` : "#F5F4EF",
+                        border: `1px solid ${field.value ? C.green : C.border}`,
+                      }}>
+                      <div className="flex items-center gap-2.5">
+                        <Send
+                          size={14}
+                          style={{ color: field.value ? C.green : C.muted }}
+                        />
+                        <div className="text-left">
+                          <p
+                            className="text-sm font-medium"
+                            style={{
+                              color: field.value ? "#2d5a1b" : C.dark,
+                            }}>
+                            Email credentials to user
+                          </p>
+                          <p className="text-[11px]" style={{ color: C.muted }}>
+                            {field.value
+                              ? "User will receive login details immediately"
+                              : "Toggle to send login details via email"}
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        className="w-10 h-5 rounded-full relative"
+                        style={{
+                          background: field.value ? C.green : C.border,
+                        }}>
+                        <div
+                          className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
+                          style={{
+                            left: field.value ? "calc(100% - 18px)" : "2px",
+                          }}
+                        />
+                      </div>
+                    </button>
+                  )}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="px-7 pb-7 flex gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleClose}
+              className="flex-1 rounded-xl">
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSaving}
+              className="flex-1 rounded-xl text-white font-semibold"
+              style={{
+                background: "linear-gradient(135deg, #1a3a5c 0%, #1e6ea6 100%)",
+              }}>
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Create Account"
+              )}
+            </Button>
+          </div>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ── Edit Account Sheet ────────────────────────────────────────────────────────
+
+function EditAccountSheet({
+  open,
+  onClose,
+  account,
+  onSave,
+  staffOptions,
+  clients,
+}: {
+  open: boolean;
+  onClose: () => void;
+  account: Account | null;
+  onSave: (data: EditAccountFormData, id: number) => Promise<void>;
+  staffOptions: StaffOption[];
+  clients: Client[];
+}) {
+  const [isSaving, setIsSaving] = useState(false);
+  const [linkedStaff, setLinkedStaff] = useState<StaffOption | null>(null);
+  const [staffSearch, setStaffSearch] = useState("");
+  const [showStaffPicker, setShowStaffPicker] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [changePassword, setChangePassword] = useState(false);
+  const [selectedPlacement, setSelectedPlacement] = useState<Client | null>(
+    null,
+  );
+  const [showPlacementPicker, setShowPlacementPicker] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
+
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<EditAccountFormData>({
+    resolver: zodResolver(editAccountSchema),
+    values: account
+      ? {
+          name: account.name,
+          email: account.email,
+          role: account.role,
+          staffId: account.staffId ?? null,
+          placementId: account.staffPlacementId ?? null,
+          password: "",
+          sendCredentials: false,
+        }
+      : {
+          name: "",
+          email: "",
+          role: "DRIVER",
+          staffId: null,
+          placementId: null,
+          password: "",
+          sendCredentials: false,
+        },
+  });
+
+  const selectedRole = watch("role");
+  const sendCredentials = watch("sendCredentials");
+
+  useEffect(() => {
+    if (account && account.staffId) {
+      const found = staffOptions.find((s) => s.id === account.staffId);
+      setLinkedStaff(found ?? null);
+      if (account.staffPlacementId) {
+        const client = clients.find((c) => c.id === account.staffPlacementId);
+        setSelectedPlacement(client ?? null);
+        setValue("placementId", client?.id ?? null);
+      }
+    } else {
+      setLinkedStaff(null);
+    }
+  }, [account, staffOptions, clients, setValue]);
+
+  useEffect(() => {
+    // Reset placement when role changes from IMPLANT to something else
+    if (selectedRole !== "IMPLANT") {
+      setValue("placementId", null);
+      setSelectedPlacement(null);
+    }
+  }, [selectedRole, setValue]);
+
+  function handleClose() {
+    reset();
+    setChangePassword(false);
+    setSelectedPlacement(null);
+    setShowPlacementPicker(false);
+    setClientSearch("");
+    onClose();
+  }
+
+  function handleLinkStaff(s: StaffOption) {
+    setLinkedStaff(s);
+    setValue("staffId", s.id);
+    if (s.placementId) {
+      const client = clients.find((c) => c.id === s.placementId);
+      if (client) {
+        setSelectedPlacement(client);
+        setValue("placementId", client.id);
+      }
+    }
+    setShowStaffPicker(false);
+  }
+
+  function handleUnlink() {
+    setLinkedStaff(null);
+    setValue("staffId", null);
+    setValue("placementId", null);
+    setSelectedPlacement(null);
+  }
+
+  function handleSelectPlacement(client: Client) {
+    setSelectedPlacement(client);
+    setValue("placementId", client.id);
+    setShowPlacementPicker(false);
+    setClientSearch("");
+  }
+
+  function handleRemovePlacement() {
+    setSelectedPlacement(null);
+    setValue("placementId", null);
+  }
+
+  function handleAutoGenerate() {
+    const pwd = generatePassword();
+    setValue("password", pwd);
+    setShowPassword(true);
+    setChangePassword(true);
+  }
+
+  async function onSubmit(data: EditAccountFormData) {
+    if (!account) return;
+
+    // If role is IMPLANT, ensure placement is included
+    if (data.role === "IMPLANT" && !data.placementId) {
+      toast.error("Placement is required for Implant role");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await onSave(data, account.id);
+      handleClose();
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const filteredClients = clients.filter(
+    (c) =>
+      c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
+      c.address?.toLowerCase().includes(clientSearch.toLowerCase()) ||
+      false ||
+      c.contactPerson?.toLowerCase().includes(clientSearch.toLowerCase()) ||
+      false,
+  );
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && !isSaving && handleClose()}>
+      <SheetContent
+        className="w-[460px] sm:w-[520px] overflow-y-auto !p-0"
+        style={{ fontFamily: "'Inter', sans-serif" }}>
+        <div
+          className="px-7 py-6"
+          style={{ borderBottom: `1px solid ${C.border}` }}>
+          <SheetTitle className="text-lg font-bold">Edit Account</SheetTitle>
+          <SheetDescription className="mt-1 text-sm">
+            {account ? `Editing account for ${account.name}.` : ""}
+          </SheetDescription>
+        </div>
+
+        <form onSubmit={handleSubmit(onSubmit)} noValidate>
+          <div className="px-7 py-6 space-y-5">
+            {/* Link Staff Section */}
+            <div
+              className="rounded-2xl p-4"
+              style={{
+                background: "#F5F4EF",
+                border: `1px solid ${C.border}`,
+              }}>
+              <p className="text-[10px] font-semibold uppercase tracking-widest mb-3">
+                Linked Staff Member
+              </p>
+              {linkedStaff ? (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="w-9 h-9">
+                      <AvatarFallback
+                        style={{ background: avatarColor(linkedStaff.id) }}>
+                        {getInitials(linkedStaff.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-sm font-semibold">
+                        {linkedStaff.name}
+                      </p>
+                      {linkedStaff.placementName && (
+                        <p className="text-[10px] flex items-center gap-1 text-muted-foreground">
+                          <MapPin size={8} /> Current:{" "}
+                          {linkedStaff.placementName}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleUnlink}
+                    className="text-xs font-medium text-red-500 flex items-center gap-1">
+                    <Unlink size={12} /> Unlink
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowStaffPicker(true)}
+                  className="w-full h-10 border-dashed border-2 rounded-xl text-sm font-medium">
+                  Link Staff Member
+                </button>
+              )}
+              {showStaffPicker && (
+                <div className="mt-3 bg-white p-2 rounded-lg border max-h-60 overflow-y-auto">
+                  <Input
+                    value={staffSearch}
+                    onChange={(e) => setStaffSearch(e.target.value)}
+                    placeholder="Search staff..."
+                    className="mb-2 h-8 text-sm"
+                  />
+                  {staffOptions
+                    .filter((s) =>
+                      s.name.toLowerCase().includes(staffSearch.toLowerCase()),
+                    )
+                    .map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => handleLinkStaff(s)}
+                        className="w-full text-left p-2 hover:bg-slate-50 text-xs">
+                        <div className="font-medium">{s.name}</div>
+                        {s.placementName && (
+                          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <MapPin size={8} /> {s.placementName}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            {/* Account Details */}
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label
+                  className="text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: C.muted }}>
+                  Full Name
+                </Label>
+                <Controller
+                  name="name"
+                  control={control}
+                  render={({ field }) => (
+                    <Input {...field} className="h-10 rounded-xl" />
+                  )}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label
+                  className="text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: C.muted }}>
+                  Email Address
+                </Label>
+                <Controller
+                  name="email"
+                  control={control}
+                  render={({ field }) => (
+                    <Input {...field} className="h-10 rounded-xl" />
+                  )}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label
+                  className="text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: C.muted }}>
+                  Role
+                </Label>
+                <Controller
+                  name="role"
+                  control={control}
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger className="h-10 rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ALL_ROLES.map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {ROLE_LABELS[r]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+
+              {/* Placement Section - Only shown for IMPLANT role */}
+              {selectedRole === "IMPLANT" && (
+                <div
+                  className="rounded-2xl p-4 mt-2"
+                  style={{
+                    background: "#F5F4EF",
+                    border: `1px solid ${C.border}`,
+                  }}>
+                  <p
+                    className="text-[10px] font-semibold uppercase tracking-widest mb-3 flex items-center gap-1"
+                    style={{ color: C.muted }}>
+                    <MapPin size={12} /> Placement Location *
+                  </p>
+
+                  {selectedPlacement ? (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{ background: `${C.blue}18` }}>
+                          <Building2 size={16} style={{ color: C.blue }} />
+                        </div>
+                        <div>
+                          <p
+                            className="text-sm font-semibold"
+                            style={{ color: C.dark }}>
+                            {selectedPlacement.name}
+                          </p>
+                          {selectedPlacement.address && (
+                            <p
+                              className="text-[10px]"
+                              style={{ color: C.muted }}>
+                              {selectedPlacement.address}
+                            </p>
+                          )}
+                          {selectedPlacement.contactPerson && (
+                            <p
+                              className="text-[10px] flex items-center gap-1 mt-0.5"
+                              style={{ color: C.muted }}>
+                              <UserCircle2 size={8} />{" "}
+                              {selectedPlacement.contactPerson}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemovePlacement}
+                        className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-red-50"
+                        style={{ color: C.red }}>
+                        <Trash2 size={12} /> Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      {showPlacementPicker ? (
+                        <div>
+                          <div className="relative mb-2">
+                            <Search
+                              size={13}
+                              className="absolute left-3 top-1/2 -translate-y-1/2"
+                              style={{ color: C.muted }}
+                            />
+                            <Input
+                              autoFocus
+                              value={clientSearch}
+                              onChange={(e) => setClientSearch(e.target.value)}
+                              placeholder="Search clients…"
+                              className="pl-9 h-9 rounded-xl text-sm bg-white"
+                            />
+                          </div>
+                          <div
+                            className="rounded-xl overflow-hidden max-h-60 overflow-y-auto"
+                            style={{
+                              background: "#fff",
+                              border: `1px solid ${C.border}`,
+                            }}>
+                            {filteredClients.length === 0 ? (
+                              <p
+                                className="text-xs text-center py-6"
+                                style={{ color: C.muted }}>
+                                No clients found
+                              </p>
+                            ) : (
+                              filteredClients.map((client) => (
+                                <button
+                                  key={client.id}
+                                  type="button"
+                                  onClick={() => handleSelectPlacement(client)}
+                                  className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#F5F4EF] text-left"
+                                  style={{
+                                    borderBottom: `1px solid ${C.border}`,
+                                  }}>
+                                  <div
+                                    className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    style={{ background: `${C.green}18` }}>
+                                    <Building2
+                                      size={12}
+                                      style={{ color: C.green }}
+                                    />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p
+                                      className="text-sm font-medium truncate"
+                                      style={{ color: C.dark }}>
+                                      {client.name}
+                                    </p>
+                                    {client.address && (
+                                      <p
+                                        className="text-[10px] truncate"
+                                        style={{ color: C.muted }}>
+                                        {client.address}
+                                      </p>
+                                    )}
+                                    {client.contactPerson && (
+                                      <p
+                                        className="text-[10px] truncate"
+                                        style={{ color: C.muted }}>
+                                        Contact: {client.contactPerson}
+                                      </p>
+                                    )}
+                                  </div>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowPlacementPicker(false)}
+                            className="mt-2 text-xs font-medium"
+                            style={{ color: C.muted }}>
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowPlacementPicker(true)}
+                          className="w-full flex items-center gap-2 justify-center h-10 rounded-xl text-sm font-medium transition-colors hover:bg-white border-dashed border-2"
+                          style={{
+                            color: C.muted,
+                            borderColor: C.border,
+                          }}>
+                          <MapPin size={14} /> Select Client Location
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {errors.placementId && (
+                    <p className="text-xs text-red-500 mt-2">
+                      {errors.placementId.message}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Password Change */}
+              <div className="pt-2 space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setChangePassword(!changePassword)}
+                  className="flex items-center gap-2 text-sm font-medium text-blue-600">
+                  <Key size={14} />{" "}
+                  {changePassword
+                    ? "Cancel Password Change"
+                    : "Change Password"}
+                </button>
+
+                {changePassword && (
+                  <>
+                    <div className="relative animate-in fade-in slide-in-from-top-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <Label className="text-xs">New Password</Label>
+                        <button
+                          type="button"
+                          onClick={handleAutoGenerate}
+                          className="flex items-center gap-1 text-xs font-medium transition-colors"
+                          style={{ color: C.blue }}>
+                          <RefreshCw size={11} /> Auto-generate
+                        </button>
+                      </div>
+                      <Controller
+                        name="password"
+                        control={control}
+                        render={({ field }) => (
+                          <Input
+                            {...field}
+                            type={showPassword ? "text" : "password"}
+                            className="h-10 rounded-xl pr-10"
+                            placeholder="Enter new password"
+                          />
+                        )}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 bottom-3">
+                        {showPassword ? (
+                          <EyeOff size={14} />
+                        ) : (
+                          <Eye size={14} />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Send Credentials Toggle for password change */}
+                    <Controller
+                      name="sendCredentials"
+                      control={control}
+                      render={({ field }) => (
+                        <button
+                          type="button"
+                          onClick={() => field.onChange(!field.value)}
+                          className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors"
+                          style={{
+                            background: field.value
+                              ? `${C.green}12`
+                              : "#F5F4EF",
+                            border: `1px solid ${field.value ? C.green : C.border}`,
+                          }}>
+                          <div className="flex items-center gap-2.5">
+                            <Send
+                              size={14}
+                              style={{ color: field.value ? C.green : C.muted }}
+                            />
+                            <div className="text-left">
+                              <p
+                                className="text-sm font-medium"
+                                style={{
+                                  color: field.value ? "#2d5a1b" : C.dark,
+                                }}>
+                                Email new password to user
+                              </p>
+                              <p
+                                className="text-[11px]"
+                                style={{ color: C.muted }}>
+                                {field.value
+                                  ? "User will receive the new password via email"
+                                  : "Toggle to send new password via email"}
+                              </p>
+                            </div>
+                          </div>
+                          <div
+                            className="w-10 h-5 rounded-full relative"
+                            style={{
+                              background: field.value ? C.green : C.border,
+                            }}>
+                            <div
+                              className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
+                              style={{
+                                left: field.value ? "calc(100% - 18px)" : "2px",
+                              }}
+                            />
+                          </div>
+                        </button>
+                      )}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="px-7 pb-7 flex gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="flex-1 rounded-xl">
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSaving}
+              className="flex-1 rounded-xl text-white font-semibold"
+              style={{
+                background: "linear-gradient(135deg, #1a3a5c 0%, #1e6ea6 100%)",
+              }}>
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </div>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ── Delete Dialog ─────────────────────────────────────────────────────────────
+
+function DeleteDialog({
+  open,
+  onClose,
+  account,
+  onConfirm,
+}: {
+  open: boolean;
+  onClose: () => void;
+  account: Account | null;
+  onConfirm: () => Promise<void>;
+}) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function handleConfirm() {
+    setIsDeleting(true);
+    try {
+      await onConfirm();
+      onClose();
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && !isDeleting && onClose()}>
+      <DialogContent className="max-w-sm rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-base font-bold">
+            Delete Account
+          </DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete the account for{" "}
+            <strong style={{ color: C.dark }}>{account?.name}</strong>?
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 mt-2">
+          <Button
+            variant="outline"
+            disabled={isDeleting}
+            onClick={onClose}
+            className="rounded-xl">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={isDeleting}
+            className="rounded-xl text-white"
+            style={{ background: C.red }}>
+            {isDeleting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              "Delete Account"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Accounts Page ─────────────────────────────────────────────────────────────
+
+export default function Accounts() {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<Role | "ALL">("ALL");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editAccount, setEditAccount] = useState<Account | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
+
+  const fetchAccounts = useCallback(async () => {
+    setIsLoading(true);
+    const headers = {
+      Authorization: `Bearer ${localStorage.getItem("bp_token")}`,
+    };
+    try {
+      const [uRes, sRes, cRes] = await Promise.all([
+        fetch(`${API_URL}/users`, { headers }),
+        fetch(`${API_URL}/staff`, { headers }),
+        fetch(`${API_URL}/clients`, { headers }),
+      ]);
+
+      if (sRes.ok) {
+        const staff = await sRes.json();
+        setStaffOptions(staff);
+      }
+
+      if (cRes.ok) {
+        const clientsData = await cRes.json();
+        setClients(clientsData);
+      }
+
+      if (uRes.ok) {
+        const users = await uRes.json();
+        setAccounts(users);
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast.error("Failed to load data");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAccounts();
+  }, [fetchAccounts]);
+
+  const handleSort = (key: SortKey) => {
+    if (key === sortKey) setSortDir(sortDir === "asc" ? "desc" : "asc");
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  async function handleCreate(data: AccountFormData) {
+    try {
+      // First create the user account
+      const res = await fetch(`${API_URL}/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("bp_token")}`,
+        },
+        body: JSON.stringify({
+          name: data.name,
+          email: data.email,
+          password: data.password,
+          role: data.role,
+          staffId: data.staffId,
+          sendEmail: data.sendCredentials,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create account");
+      }
+
+      const newUser = await res.json();
+
+      // If this is an IMPLANT with placement, update the staff record using the dedicated endpoint
+      if (data.role === "IMPLANT" && data.placementId && data.staffId) {
+        const placementRes = await fetch(
+          `${API_URL}/staff/${data.staffId}/placement`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("bp_token")}`,
+            },
+            body: JSON.stringify({ placementId: data.placementId }),
+          },
+        );
+
+        if (!placementRes.ok) {
+          const errText = await placementRes.text();
+          console.warn(
+            "Account created but placement not saved to staff:",
+            errText,
+          );
+          toast.warning("Account created but placement could not be saved");
+        }
+      }
+
+      toast.success(
+        data.sendCredentials
+          ? "Account created and credentials emailed successfully"
+          : "Account created successfully",
+      );
+
+      fetchAccounts();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create account");
+    }
+  }
+
+  async function handleEdit(data: EditAccountFormData, id: number) {
+    try {
+      // Update user account
+      const res = await fetch(`${API_URL}/users/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("bp_token")}`,
+        },
+        body: JSON.stringify({
+          name: data.name,
+          email: data.email,
+          role: data.role,
+          staffId: data.staffId,
+          ...(data.password ? { password: data.password } : {}),
+          sendEmail: data.sendCredentials,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to update account");
+      }
+
+      const updatedUser = await res.json();
+
+      // If this is an IMPLANT with staffId, update the placement
+      if (data.role === "IMPLANT" && data.staffId) {
+        const placementRes = await fetch(
+          `${API_URL}/staff/${data.staffId}/placement`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("bp_token")}`,
+            },
+            body: JSON.stringify({ placementId: data.placementId || null }),
+          },
+        );
+
+        if (!placementRes.ok) {
+          const errText = await placementRes.text();
+          console.warn(
+            "Account updated but placement not saved to staff:",
+            errText,
+          );
+          toast.warning("Account updated but placement could not be saved");
+        }
+      } else if (data.staffId) {
+        // If role changed from IMPLANT, clear placement from staff
+        await fetch(`${API_URL}/staff/${data.staffId}/placement`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("bp_token")}`,
+          },
+          body: JSON.stringify({ placementId: null }),
+        });
+      }
+
+      // Show appropriate success message
+      if (data.sendCredentials && data.password) {
+        toast.success("Account updated and new password emailed successfully");
+      } else {
+        toast.success("Account updated successfully");
+      }
+
+      fetchAccounts();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update account");
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+
+    try {
+      const res = await fetch(`${API_URL}/users/${deleteTarget.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("bp_token")}`,
+        },
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to delete account");
+      }
+
+      toast.success("Account deleted successfully");
+      fetchAccounts();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete account");
+    }
+  }
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    let list = accounts.filter(
+      (a) =>
+        (a.name.toLowerCase().includes(q) ||
+          a.email.toLowerCase().includes(q) ||
+          a.placementName?.toLowerCase().includes(q) ||
+          false) &&
+        (roleFilter === "ALL" || a.role === roleFilter),
+    );
+
+    return list.sort((a, b) => {
+      let va: any;
+      let vb: any;
+
+      if (sortKey === "placement") {
+        va = a.placementName || "";
+        vb = b.placementName || "";
+      } else {
+        va = (a as any)[sortKey];
+        vb = (b as any)[sortKey];
+      }
+
+      if (va < vb) return sortDir === "asc" ? -1 : 1;
+      if (va > vb) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [accounts, search, roleFilter, sortKey, sortDir]);
+
+  return (
+    <div
+      className="h-full overflow-auto px-6 pt-5 pb-6"
+      style={{ scrollbarGutter: "stable" }}>
+      <div
+        className="flex items-start justify-between mb-5"
+        style={{ animation: "fadeSlideUp 0.3s ease both" }}>
+        <div>
+          <p className="text-xs font-medium mb-1" style={{ color: C.muted }}>
+            {new Date().toDateString()}
+          </p>
+          <h2
+            className="text-3xl font-bold tracking-tight"
+            style={{ color: C.dark }}>
+            Accounts
+          </h2>
+        </div>
+        <Button
+          onClick={() => setCreateOpen(true)}
+          className="flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold text-white"
+          style={{
+            background: "linear-gradient(135deg, #1a3a5c 0%, #1e6ea6 100%)",
+            boxShadow: "0 2px 10px rgba(26,58,92,0.25)",
+          }}>
+          <Plus size={15} /> New Account
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        {[
+          {
+            label: "Total Accounts",
+            value: accounts.length,
+            icon: UserCircle2,
+            color: "#1e6ea6",
+            bg: "#1e6ea618",
+          },
+          {
+            label: "Admins & Managers",
+            value: accounts.filter((a) =>
+              ["SUPER_ADMIN", "MANAGER"].includes(a.role),
+            ).length,
+            icon: ShieldCheck,
+            color: C.blue,
+            bg: `${C.blue}18`,
+          },
+          {
+            label: "Linked to Staff",
+            value: accounts.filter((a) => !!a.staffId).length,
+            icon: Link2,
+            color: C.green,
+            bg: `${C.green}18`,
+          },
+        ].map((card, i) => (
+          <div
+            key={card.label}
+            className="rounded-2xl p-4"
+            style={{
+              background: "#fff",
+              border: `1px solid ${C.border}`,
+              animation: `fadeSlideUp 0.4s ease ${i * 0.07}s both`,
+            }}>
+            <div className="flex items-start justify-between mb-3">
+              <p className="text-xs font-medium" style={{ color: C.muted }}>
+                {card.label}
+              </p>
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center"
+                style={{ background: card.bg }}>
+                <card.icon size={13} style={{ color: card.color }} />
+              </div>
+            </div>
+            <p className="text-2xl font-bold" style={{ color: C.dark }}>
+              {card.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div
+        className="rounded-2xl p-4 mb-4 flex items-center gap-3"
+        style={{
+          background: "#fff",
+          border: `1px solid ${C.border}`,
+          animation: "fadeSlideUp 0.4s ease 0.2s both",
+        }}>
+        <div className="relative flex-1 max-w-sm">
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2"
+            style={{ color: C.muted }}
+          />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, email, placement…"
+            className="pl-9 h-9 rounded-xl text-sm border-0 bg-[#F5F4EF]"
+          />
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
+          <Filter size={13} style={{ color: C.muted }} />
+          <Select
+            value={roleFilter}
+            onValueChange={(v) => setRoleFilter(v as any)}>
+            <SelectTrigger className="h-9 rounded-xl text-xs w-44 border-0 bg-[#F5F4EF]">
+              <SelectValue placeholder="All Roles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Roles</SelectItem>
+              {ALL_ROLES.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {ROLE_LABELS[r]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div
+        className="rounded-2xl overflow-hidden min-h-[400px]"
+        style={{
+          background: "#fff",
+          border: `1px solid ${C.border}`,
+          animation: "fadeSlideUp 0.4s ease 0.28s both",
+        }}>
+        <div
+          className="grid px-5 py-3"
+          style={{
+            gridTemplateColumns: "2fr 1.8fr 1.2fr 1.5fr 1.2fr 52px",
+            borderBottom: `1px solid ${C.border}`,
+            background: "#FAFAF8",
+          }}>
+          <SortHeader
+            label="Account"
+            sortKey="name"
+            current={sortKey}
+            dir={sortDir}
+            onSort={handleSort}
+          />
+          <SortHeader
+            label="Email"
+            sortKey="email"
+            current={sortKey}
+            dir={sortDir}
+            onSort={handleSort}
+          />
+          <SortHeader
+            label="Role"
+            sortKey="role"
+            current={sortKey}
+            dir={sortDir}
+            onSort={handleSort}
+          />
+          <SortHeader
+            label="Placement"
+            sortKey="placement"
+            current={sortKey}
+            dir={sortDir}
+            onSort={handleSort}
+          />
+          <SortHeader
+            label="Created"
+            sortKey="createdAt"
+            current={sortKey}
+            dir={sortDir}
+            onSort={handleSort}
+          />
+          <span />
+        </div>
+
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-32 gap-3">
+            <Loader2
+              className="w-8 h-8 animate-spin"
+              style={{ color: C.blue }}
+            />
+            <p className="text-sm font-medium" style={{ color: C.muted }}>
+              Loading accounts…
+            </p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+            <UserCircle2
+              size={28}
+              style={{ color: C.border }}
+              className="mb-4"
+            />
+            <h3 className="text-base font-bold mb-1" style={{ color: C.dark }}>
+              No Accounts Found
+            </h3>
+            <p
+              className="text-sm max-w-[280px] mb-6"
+              style={{ color: C.muted }}>
+              No user accounts found. Adjust filters or create a new one.
+            </p>
+            <Button
+              onClick={() => setCreateOpen(true)}
+              variant="outline"
+              className="rounded-xl h-9 px-5 border-[#c4dff0] text-[#1a3a5c]">
+              <Plus size={14} className="mr-2" /> New Account
+            </Button>
+          </div>
+        ) : (
+          filtered.map((a, i) => {
+            const roleStyle = ROLE_COLORS[a.role];
+            return (
+              <div
+                key={a.id}
+                className="grid items-center px-5 py-3.5 transition-colors hover:bg-[#F5F4EF]"
+                style={{
+                  gridTemplateColumns: "2fr 1.8fr 1.2fr 1.5fr 1.2fr 52px",
+                  borderBottom:
+                    i < filtered.length - 1 ? `1px solid ${C.border}` : "none",
+                  animation: `fadeSlideUp 0.3s ease ${0.3 + i * 0.04}s both`,
+                }}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <Avatar className="w-8 h-8 flex-shrink-0">
+                    <AvatarImage src={a.avatarUrl || ""} />
+                    <AvatarFallback
+                      className="text-xs font-bold text-white"
+                      style={{ background: avatarColor(a.id) }}>
+                      {getInitials(a.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p
+                      className="text-sm font-semibold truncate"
+                      style={{ color: C.dark }}>
+                      {a.name}
+                    </p>
+                    {a.staffName && (
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <Link2 size={9} />
+                        {a.staffName}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs truncate" style={{ color: C.dark }}>
+                  {a.email}
+                </p>
+                <div>
+                  <span
+                    className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-semibold"
+                    style={{
+                      background: roleStyle.bg,
+                      color: roleStyle.color,
+                    }}>
+                    {ROLE_LABELS[a.role]}
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  {a.staffPlacementId ? (
+                    <div className="flex items-start gap-1.5">
+                      <MapPin
+                        size={12}
+                        className="flex-shrink-0 mt-0.5"
+                        style={{ color: C.muted }}
+                      />
+                      <div>
+                        <p
+                          className="text-xs font-medium"
+                          style={{ color: C.dark }}>
+                          {a.placementName}
+                        </p>
+                        {a.placementAddress && (
+                          <p className="text-[10px]" style={{ color: C.muted }}>
+                            {a.placementAddress}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs" style={{ color: C.muted }}>
+                      —
+                    </p>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {new Date(a.createdAt).toLocaleDateString()}
+                </p>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[#F0EFE9] text-muted-foreground">
+                      <MoreHorizontal size={15} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                    <DropdownMenuItem
+                      onClick={() => setEditAccount(a)}
+                      className="text-xs cursor-pointer">
+                      <Pencil size={13} className="mr-2" /> Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setDeleteTarget(a)}
+                      className="text-xs cursor-pointer text-red-500">
+                      <Trash2 size={13} className="mr-2" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <CreateAccountSheet
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSave={handleCreate}
+        staffOptions={staffOptions}
+        clients={clients}
+      />
+      <EditAccountSheet
+        open={!!editAccount}
+        onClose={() => setEditAccount(null)}
+        account={editAccount}
+        onSave={handleEdit}
+        staffOptions={staffOptions}
+        clients={clients}
+      />
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        account={deleteTarget}
+        onConfirm={handleDelete}
+      />
+    </div>
+  );
+}

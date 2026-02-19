@@ -58,10 +58,12 @@ export function Tooltip({
   label,
   children,
   position = "right",
+  disabled = false,
 }: {
   label: string;
   children: React.ReactNode;
   position?: "right" | "bottom";
+  disabled?: boolean;
 }) {
   const [visible, setVisible] = useState(false);
   return (
@@ -70,7 +72,7 @@ export function Tooltip({
       onMouseEnter={() => setVisible(true)}
       onMouseLeave={() => setVisible(false)}>
       {children}
-      {visible && (
+      {visible && !disabled && (
         <div
           className="absolute z-50 whitespace-nowrap px-2.5 py-1.5 rounded-lg text-xs font-medium text-white pointer-events-none"
           style={{
@@ -147,7 +149,13 @@ function NavLoader({ active }: { active: boolean }) {
 }
 
 // ── More Popover ───────────────────────────────────────────────────────────
-function MorePopover({ activePath }: { activePath: string }) {
+function MorePopover({
+  activePath,
+  expanded,
+}: {
+  activePath: string;
+  expanded: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -163,17 +171,31 @@ function MorePopover({ activePath }: { activePath: string }) {
   }, []);
 
   return (
-    <div ref={ref} className="relative">
-      <Tooltip label="More" position="right">
+    <div ref={ref} className="relative flex justify-center">
+      <Tooltip label="More" position="right" disabled={expanded}>
         <button
           onClick={() => setOpen(!open)}
-          className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150"
+          className="h-10 rounded-xl flex items-center gap-3"
           style={{
+            padding: "0 10px",
+            width: expanded ? "160px" : "40px",
+            overflow: "hidden",
             background:
               isActive || open ? "rgba(255,255,255,0.12)" : "transparent",
             color: isActive || open ? "#fff" : "rgba(255,255,255,0.42)",
+            transition:
+              "background 0.15s ease, color 0.15s ease, width 0.25s cubic-bezier(0.4,0,0.2,1)",
           }}>
-          <MoreHorizontal size={19} />
+          <MoreHorizontal size={19} className="flex-shrink-0" />
+          <span
+            className="text-sm font-medium whitespace-nowrap"
+            style={{
+              opacity: expanded ? 1 : 0,
+              transition: "opacity 0.15s ease",
+              pointerEvents: "none",
+            }}>
+            More
+          </span>
         </button>
       </Tooltip>
       {open && (
@@ -234,25 +256,141 @@ function IconBtn({
   );
 }
 
+// ── Expand Toggle ──────────────────────────────────────────────────────────
+function ExpandToggle({
+  expanded,
+  onToggle,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <button
+      onClick={onToggle}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="flex items-center justify-center"
+      style={{
+        width: "20px",
+        height: "44px",
+        borderRadius: "6px",
+        background: hovered
+          ? "rgba(255,255,255,0.18)"
+          : "rgba(255,255,255,0.08)",
+        border: `1px solid ${hovered ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.12)"}`,
+        boxShadow: hovered ? "0 0 0 3px rgba(255,255,255,0.04)" : "none",
+        transition: "all 0.18s ease",
+        cursor: "pointer",
+        color: hovered ? "#ffffff" : "rgba(255,255,255,0.45)",
+      }}
+      title={expanded ? "Collapse sidebar" : "Expand sidebar"}>
+      <svg
+        width="9"
+        height="9"
+        viewBox="0 0 8 8"
+        fill="none"
+        style={{
+          transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+          transition: "transform 0.25s ease",
+        }}>
+        <path
+          d="M2 1.5L5.5 4L2 6.5"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
+  );
+}
+
+// ── Nav Button ─────────────────────────────────────────────────────────────
+function NavButton({
+  isActive,
+  onClick,
+  expanded,
+  label,
+  icon: Icon,
+}: {
+  isActive: boolean;
+  onClick: () => void;
+  expanded: boolean;
+  label: string;
+  icon: React.ElementType;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const bg = isActive
+    ? "rgba(255,255,255,0.13)"
+    : hovered
+      ? "rgba(255,255,255,0.07)"
+      : "transparent";
+  const color = isActive
+    ? "#ffffff"
+    : hovered
+      ? "rgba(255,255,255,0.75)"
+      : "rgba(255,255,255,0.42)";
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="h-10 rounded-xl flex items-center gap-3"
+      style={{
+        // Equal 10px padding on both sides; width grows when expanded
+        padding: "0 10px",
+        width: expanded ? "160px" : "40px",
+        background: bg,
+        color,
+        transition:
+          "background 0.15s ease, color 0.15s ease, width 0.25s cubic-bezier(0.4,0,0.2,1)",
+        overflow: "hidden",
+      }}>
+      <Icon
+        size={19}
+        className="flex-shrink-0"
+        style={{
+          transition: "transform 0.15s ease",
+          transform: hovered && !isActive ? "scale(1.1)" : "scale(1)",
+        }}
+      />
+      <span
+        className="text-sm font-medium whitespace-nowrap"
+        style={{
+          opacity: expanded ? 1 : 0,
+          transition: "opacity 0.15s ease",
+          pointerEvents: "none",
+        }}>
+        {label}
+      </span>
+    </button>
+  );
+}
+
 // ── Layout ─────────────────────────────────────────────────────────────────
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [navigating, setNavigating] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   const activePath = location.pathname;
-
-  // Page title derived from current path
   const activeItem = [...NAV_ITEMS, ...MORE_ITEMS].find(
     (i) => i.path === activePath,
   );
   const pageTitle = activeItem?.label ?? "Dashboard";
 
+  const SIDEBAR_W_COLLAPSED = 58;
+  const SIDEBAR_W_EXPANDED = 180;
+  const sidebarW = sidebarExpanded ? SIDEBAR_W_EXPANDED : SIDEBAR_W_COLLAPSED;
+
   function handleNav(path: string) {
     if (path === activePath) return;
     setNavigating(true);
-    // Small delay so the loader is visible, then navigate (React Router — no reload)
     setTimeout(() => {
       navigate(path);
       setNavigating(false);
@@ -260,10 +398,14 @@ export default function Layout() {
   }
 
   function handleRefresh() {
-    // Incrementing the key unmounts and remounts <Outlet />,
-    // giving each page a brand new mount — so useMemo re-runs,
-    // greeting re-randomises, data re-fetches, etc.
     setRefreshKey((k) => k + 1);
+  }
+
+  // ── Logic: Logout ────────────────────────────────────────────────────────
+  function handleLogout() {
+    localStorage.removeItem("bp_token");
+    localStorage.removeItem("bp_user");
+    navigate("/login");
   }
 
   return (
@@ -274,8 +416,9 @@ export default function Layout() {
 
       {/* ── Top bar ── */}
       <header className="flex items-center h-[60px] flex-shrink-0 px-5">
-        {/* Logo */}
-        <div className="w-[58px] flex items-center justify-center flex-shrink-0">
+        <div
+          className="flex items-center justify-center flex-shrink-0 transition-all duration-300"
+          style={{ width: `${SIDEBAR_W_COLLAPSED}px` }}>
           <img
             src="/logo.png"
             alt="Blue Pearls"
@@ -283,12 +426,10 @@ export default function Layout() {
           />
         </div>
 
-        {/* Page title */}
         <h1 className="flex-1 text-white text-base font-bold tracking-tight pl-3">
           {pageTitle}
         </h1>
 
-        {/* Refresh */}
         <div className="mr-2">
           <Tooltip label="Refresh" position="bottom">
             <button
@@ -324,7 +465,6 @@ export default function Layout() {
           </Tooltip>
         </div>
 
-        {/* Action icons */}
         <div className="flex items-center gap-2 mr-1">
           <IconBtn icon={Search} tip="Search" />
           <IconBtn icon={Bell} tip="Notifications" />
@@ -335,49 +475,65 @@ export default function Layout() {
 
       {/* ── Body ── */}
       <div className="flex flex-1 overflow-hidden px-3 pb-3">
-        {/* Sidebar */}
-        <aside className="flex flex-col items-center py-4 w-[58px] flex-shrink-0">
-          <nav className="flex flex-col items-center gap-2.5 flex-1">
-            {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
-              const isActive = activePath === path;
-              return (
-                <Tooltip key={path} label={label} position="right">
-                  <button
-                    onClick={() => handleNav(path)}
-                    className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150"
-                    style={{
-                      background: isActive
-                        ? "rgba(255,255,255,0.13)"
-                        : "transparent",
-                      color: isActive ? "#ffffff" : "rgba(255,255,255,0.42)",
-                    }}>
-                    <Icon size={19} />
-                  </button>
-                </Tooltip>
-              );
-            })}
-            <MorePopover activePath={activePath} />
-          </nav>
+        {/* Sidebar + toggle wrapper */}
+        <div
+          className="relative flex-shrink-0 flex"
+          style={{
+            width: `${sidebarW}px`,
+            transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
+          }}>
+          <aside className="flex flex-col items-center py-4 w-full">
+            <nav className="flex flex-col items-center gap-2.5 flex-1 w-full py-0">
+              {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
+                const isActive = activePath === path;
+                return (
+                  <Tooltip
+                    key={path}
+                    label={label}
+                    position="right"
+                    disabled={sidebarExpanded}>
+                    <NavButton
+                      isActive={isActive}
+                      onClick={() => handleNav(path)}
+                      expanded={sidebarExpanded}
+                      label={label}
+                      icon={Icon}
+                    />
+                  </Tooltip>
+                );
+              })}
+              <MorePopover activePath={activePath} expanded={sidebarExpanded} />
+            </nav>
 
-          {/* Logout */}
-          <Tooltip label="Log Out" position="right">
-            <button
-              onClick={() => navigate("/login")}
-              className="w-10 h-10 rounded-xl flex items-center justify-center transition-colors"
-              style={{ color: "rgba(255,255,255,0.32)" }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.color = "rgba(255,255,255,0.75)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.color = "rgba(255,255,255,0.32)")
-              }>
-              <LogOut size={18} />
-            </button>
-          </Tooltip>
-        </aside>
+            {/* Logout */}
+            <div className="flex justify-center w-full">
+              <Tooltip
+                label="Log Out"
+                position="right"
+                disabled={sidebarExpanded}>
+                <NavButton
+                  isActive={false}
+                  onClick={handleLogout}
+                  expanded={sidebarExpanded}
+                  label="Log Out"
+                  icon={LogOut}
+                />
+              </Tooltip>
+            </div>
+          </aside>
 
-        {/* Rounded content area — Outlet renders the page here */}
-        {/* refreshKey forces a true unmount+remount of the page on refresh */}
+          {/* Expand toggle — pinned to right edge of the sidebar wrapper, overflows into content gap */}
+          <div
+            className="absolute top-1/2 -translate-y-1/2 z-30"
+            style={{ right: "-8px" }}>
+            <ExpandToggle
+              expanded={sidebarExpanded}
+              onToggle={() => setSidebarExpanded((v) => !v)}
+            />
+          </div>
+        </div>
+
+        {/* Content area */}
         <div
           key={refreshKey}
           className="flex-1 overflow-hidden"

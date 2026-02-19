@@ -62,7 +62,13 @@ export default function LoginPage() {
       localStorage.setItem("bp_user", JSON.stringify(result.user));
 
       toast.success(`Welcome back, ${result.user.name}`);
-      navigate("/dashboard");
+
+      // Navigate to the correct UI based on role
+      const role = result.user.role;
+      if (role === "IMPLANT") navigate("/create-job");
+      else if (role === "SECURITY_GUARD") navigate("/security");
+      else if (role === "FUEL_AGENT") navigate("/fuel");
+      else navigate("/dashboard");
     } catch (error) {
       // Server connection errors show in Sonner notification
       toast.error("Network Error", {

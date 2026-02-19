@@ -4,27 +4,69 @@ import { Toaster } from "sonner";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { ask } from "@tauri-apps/plugin-dialog";
+
+// Pages
 import LoginPage from "./pages/Login";
-import Layout from "./layouts/Layout";
 import Dashboard from "./pages/Dashboard";
+import Staff from "./pages/Staff";
+import StaffDetail from "./pages/StaffDetail";
+import Accounts from "./pages/Accounts";
+import Clients from "./pages/Clients";
+import Vehicles from "./pages/Vehicles";
+import Jobs from "./pages/Jobs";
+import CreateJob from "./pages/CreateJob";
 
-// ── Security Wrappers ────────────────────────────────────────────────────────
+// Layouts
+import Layout from "./layouts/Layout";
+import ImplantLayout from "./layouts/ImplantLayout";
+import SecurityLayout from "./layouts/SecurityLayout";
+import SecurityDashboard from "./pages/Securitydashboard";
+import FuelLayout from "./layouts/FuelLayout";
+import FuelDashboard from "./pages/FuelDashboard";
 
-// Prevents unauthorized users from accessing the app
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const getUser = () => {
+  const userJson = localStorage.getItem("bp_user");
+  return userJson ? JSON.parse(userJson) : null;
+};
+
+// ── Security Wrappers ─────────────────────────────────────────────────────────
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem("bp_token");
   if (!token) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };
 
-// Prevents logged-in users from going back to the login page
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem("bp_token");
-  if (token) return <Navigate to="/dashboard" replace />;
+  const user = getUser();
+  if (token && user) {
+    if (user.role === "IMPLANT") return <Navigate to="/create-job" replace />;
+    if (user.role === "SECURITY_GUARD")
+      return <Navigate to="/security" replace />;
+    if (user.role === "FUEL_AGENT") return <Navigate to="/fuel" replace />;
+    return <Navigate to="/dashboard" replace />;
+  }
   return <>{children}</>;
 };
 
-// ── Update Button ────────────────────────────────────────────────────────────
+const RoleGuard = ({
+  allowedRoles,
+  children,
+}: {
+  allowedRoles: string[];
+  children: React.ReactNode;
+}) => {
+  const user = getUser();
+  if (!user || !allowedRoles.includes(user.role)) {
+    return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
+};
+
+// ── Update Badge ──────────────────────────────────────────────────────────────
 
 type UpdateStatus = "idle" | "available" | "downloading" | "done" | "error";
 
@@ -54,11 +96,9 @@ function UpdateBadge() {
 
   async function handleUpdateClick() {
     if (status !== "available") return;
-
     try {
       const update = await check();
       if (!update) return;
-
       const shouldUpdate = await ask(
         `A newer version is available.\n\n${update.body}\n\nWould you like to update now?`,
         {
@@ -68,11 +108,9 @@ function UpdateBadge() {
           cancelLabel: "Later",
         },
       );
-
       if (shouldUpdate) {
         setStatus("downloading");
         setLabel("Downloading…");
-
         await update.downloadAndInstall((event) => {
           switch (event.event) {
             case "Started":
@@ -86,7 +124,6 @@ function UpdateBadge() {
               break;
           }
         });
-
         await relaunch();
       }
     } catch {
@@ -96,7 +133,6 @@ function UpdateBadge() {
   }
 
   if (status === "error" || status === "done" || label === "") return null;
-
   const isClickable = status === "available";
 
   return (
@@ -147,15 +183,22 @@ function UpdateBadge() {
   );
 }
 
-// ── App ──────────────────────────────────────────────────────────────────────
+// ── App ───────────────────────────────────────────────────────────────────────
 
 function App() {
+  const MANAGEMENT_ROLES = [
+    "SUPER_ADMIN",
+    "MANAGER",
+    "PSV_COORDINATOR",
+    "TRUCK_COORDINATOR",
+  ];
+
   return (
     <BrowserRouter>
-      {/* Sonner Toaster - Notifications appear at bottom-center as requested */}
       <Toaster position="bottom-center" richColors />
 
       <Routes>
+        {/* Public */}
         <Route
           path="/login"
           element={
@@ -165,14 +208,58 @@ function App() {
           }
         />
 
-        {/* Protected layout routes */}
+        {/* ── 1. MANAGEMENT UI ── */}
         <Route
           element={
             <ProtectedRoute>
-              <Layout />
+              <RoleGuard allowedRoles={MANAGEMENT_ROLES}>
+                <Layout />
+              </RoleGuard>
             </ProtectedRoute>
           }>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/staff" element={<Staff />} />
+          <Route path="/staff/:id" element={<StaffDetail />} />
+          <Route path="/accounts" element={<Accounts />} />
+          <Route path="/vehicles" element={<Vehicles />} />
+          <Route path="/jobs" element={<Jobs />} />
+          <Route path="/clients" element={<Clients />} />
+        </Route>
+
+        {/* ── 2. IMPLANT UI ── */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <RoleGuard allowedRoles={["IMPLANT"]}>
+                <ImplantLayout />
+              </RoleGuard>
+            </ProtectedRoute>
+          }>
+          <Route path="/create-job" element={<CreateJob />} />
+        </Route>
+
+        {/* ── 3. SECURITY UI ── */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <RoleGuard allowedRoles={["SECURITY_GUARD"]}>
+                <SecurityLayout />
+              </RoleGuard>
+            </ProtectedRoute>
+          }>
+          <Route path="/security" element={<SecurityDashboard />} />
+        </Route>
+
+        {/* ── 4. FUEL AGENT UI ── */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <RoleGuard allowedRoles={["FUEL_AGENT"]}>
+                <FuelLayout />
+              </RoleGuard>
+            </ProtectedRoute>
+          }>
+          <Route path="/fuel" element={<FuelDashboard />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
