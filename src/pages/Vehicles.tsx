@@ -552,6 +552,13 @@ export default function Vehicles() {
   const [ownershipFilter, setOwnershipFilter] = useState("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("numberPlate");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<Vehicle | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Vehicle | null>(null);
@@ -776,21 +783,21 @@ export default function Vehicles() {
             sortKey="numberPlate"
             current={sortKey}
             dir={sortDir}
-            onSort={setSortKey}
+            onSort={handleSort}
           />
           <SortHeader
             label="Type"
             sortKey="type"
             current={sortKey}
             dir={sortDir}
-            onSort={setSortKey}
+            onSort={handleSort}
           />
           <SortHeader
             label="Ownership"
             sortKey="ownership"
             current={sortKey}
             dir={sortDir}
-            onSort={setSortKey}
+            onSort={handleSort}
           />
           <span
             className="text-[10px] font-semibold uppercase tracking-widest"
@@ -802,7 +809,7 @@ export default function Vehicles() {
             sortKey="year"
             current={sortKey}
             dir={sortDir}
-            onSort={setSortKey}
+            onSort={handleSort}
           />
           <span />
         </div>
