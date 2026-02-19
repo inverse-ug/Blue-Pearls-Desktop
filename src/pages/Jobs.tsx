@@ -587,9 +587,6 @@ function JobSheet({
   currentUserId?: number | null;
 }) {
   const [isSaving, setIsSaving] = useState(false);
-  const [selectedVehicle, setSelectedVehicle] = useState<VehicleOption | null>(
-    null,
-  );
 
   // Filter staff for drivers (Logistics department)
   const logisticsStaff = useMemo(
@@ -646,7 +643,8 @@ function JobSheet({
     getValues,
     formState: { errors },
   } = useForm<JobFormData>({
-    resolver: zodResolver(jobSchema),
+    //@ts-ignore - this is a known issue with react-hook-form and zod optional fields
+    resolver: zodResolver(jobSchema) as any,
     defaultValues: buildDefaultValues(editing),
   });
 
@@ -654,7 +652,6 @@ function JobSheet({
   useEffect(() => {
     if (open) {
       reset(buildDefaultValues(editing));
-      setSelectedVehicle(null);
     }
   }, [open, editing?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -667,7 +664,6 @@ function JobSheet({
   // Fetch vehicle details when vehicle changes; auto-fill default driver if no driver set yet
   useEffect(() => {
     if (!watchVehicleId) {
-      setSelectedVehicle(null);
       return;
     }
     const fetchVehicle = async () => {
@@ -679,7 +675,6 @@ function JobSheet({
         });
         if (res.ok) {
           const vehicle = await res.json();
-          setSelectedVehicle(vehicle);
           // Auto-fill default driver only when no driver is currently selected
           if (vehicle.defaultDriverId && !getValues("driverId")) {
             setValue("driverId", vehicle.defaultDriverId);
@@ -706,7 +701,6 @@ function JobSheet({
 
   function handleClose() {
     reset(buildDefaultValues(null));
-    setSelectedVehicle(null);
     onClose();
   }
 

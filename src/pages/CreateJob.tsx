@@ -29,11 +29,6 @@ interface ClientOption {
   name: string;
   contactPerson?: string;
 }
-interface StaffOption {
-  id: number;
-  name: string;
-  role?: string;
-}
 
 type FormState = {
   clientId: string;
@@ -573,7 +568,6 @@ export default function CreateJob() {
   ).current;
 
   const [clients, setClients] = useState<ClientOption[]>([]);
-  const [staff, setStaff] = useState<StaffOption[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   // Track placement name separately for the location pill
   const [placementName, setPlacementName] = useState<string>("");
@@ -605,16 +599,15 @@ export default function CreateJob() {
           ? fetch(`${API_URL}/staff/${user.staffId}`, { headers: h })
           : Promise.resolve(null);
 
-        const [cR, sR, staffRecordRes] = await Promise.all([
+        const [cR, _sR, staffRecordRes] = await Promise.all([
           fetch(`${API_URL}/clients`, { headers: h }),
           fetch(`${API_URL}/staff`, { headers: h }),
           fetchStaffRecord,
         ]);
 
-        const [cD, sD] = await Promise.all([cR.json(), sR.json()]);
+        const cD = await cR.json();
 
         if (cR.ok) setClients(cD);
-        if (sR.ok) setStaff(sD);
 
         // Resolve placement from the staff record
         if (staffRecordRes && staffRecordRes.ok && cR.ok) {

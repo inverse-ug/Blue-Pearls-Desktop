@@ -40,7 +40,6 @@ import {
 import {
   Sheet,
   SheetContent,
-  SheetHeader,
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
@@ -216,6 +215,7 @@ function StaffSheet({
     setValue,
     formState: { errors },
   } = useForm<StaffFormData>({
+    //@ts-ignore - zod version mismatch workaround
     resolver: zodResolver(staffSchema),
     values: editing
       ? {

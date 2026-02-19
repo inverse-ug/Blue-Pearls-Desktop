@@ -9,7 +9,6 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
-  Filter,
   Loader2,
   Contact,
   Building2,
@@ -200,6 +199,7 @@ function ClientSheet({
     reset,
     formState: { errors },
   } = useForm<ClientFormData>({
+    //@ts-ignore - this is a known issue with react-hook-form and zod optional fields
     resolver: zodResolver(clientSchema),
     values: editing
       ? {

@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -21,9 +20,6 @@ import {
   Building,
   Link2,
   Unlink,
-  X,
-  Mail,
-  Phone,
 } from "lucide-react";
 import { C } from "../layouts/Layout";
 import { Button } from "@/components/ui/button";
@@ -46,7 +42,6 @@ import {
 import {
   Sheet,
   SheetContent,
-  SheetHeader,
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
@@ -185,7 +180,8 @@ function VehicleSheet({ open, onClose, editing, onSave, drivers }: any) {
     setValue,
     formState: { errors },
   } = useForm<VehicleFormData>({
-    resolver: zodResolver(vehicleSchema),
+    // @ts-ignore - zod version mismatch workaround
+    resolver: zodResolver(vehicleSchema) as any,
     values: editing
       ? {
           ...editing,
@@ -229,31 +225,49 @@ function VehicleSheet({ open, onClose, editing, onSave, drivers }: any) {
     }
   }
 
-  const FI = ({ name, label, placeholder, type = "text" }: any) => (
-    <div className="space-y-1.5">
-      <Label className="text-[10px] font-bold uppercase tracking-widest text-[#6b8fa8]">
-        {label}
-      </Label>
-      <Controller
-        name={name}
-        control={control}
-        render={({ field }) => (
-          <Input
-            {...field}
-            value={field.value ?? ""}
-            type={type}
-            placeholder={placeholder}
-            className="h-10 rounded-xl text-sm"
-          />
+  // Replace the FI component with this properly typed version
+  const FI = ({
+    name,
+    label,
+    placeholder,
+    type = "text",
+  }: {
+    name: FieldPath<VehicleFormData>;
+    label: string;
+    placeholder?: string;
+    type?: string;
+  }) => {
+    // Type-safe way to access error messages
+    const error = errors[name];
+
+    return (
+      <div className="space-y-1.5">
+        <Label
+          className="text-[10px] font-bold uppercase tracking-widest"
+          style={{ color: "#6b8fa8" }}>
+          {label}
+        </Label>
+        <Controller
+          name={name}
+          control={control}
+          render={({ field }) => (
+            <Input
+              {...field}
+              value={field.value ?? ""}
+              type={type}
+              placeholder={placeholder}
+              className="h-10 rounded-xl text-sm"
+            />
+          )}
+        />
+        {error && (
+          <p className="text-[10px] text-red-500 mt-0.5">
+            {error.message as string}
+          </p>
         )}
-      />
-      {errors[name] && (
-        <p className="text-[10px] text-red-500 mt-0.5">
-          {errors[name]?.message as string}
-        </p>
-      )}
-    </div>
-  );
+      </div>
+    );
+  };
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && !isSaving && handleClose()}>
@@ -530,14 +544,12 @@ function DeleteDialog({ open, onClose, vehicle, onConfirm }: any) {
 // ── Main Page ──────────────────────────────────────────────────────────────
 
 export default function Vehicles() {
-  const navigate = useNavigate();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<StaffOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL");
-  const [ownershipFilter, setOwnershipFilter] =
-    useState<OwnershipFilter>("ALL");
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [ownershipFilter, setOwnershipFilter] = useState("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("numberPlate");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [sheetOpen, setSheetOpen] = useState(false);

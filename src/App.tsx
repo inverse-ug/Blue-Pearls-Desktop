@@ -20,9 +20,9 @@ import CreateJob from "./pages/CreateJob";
 import Layout from "./layouts/Layout";
 import ImplantLayout from "./layouts/ImplantLayout";
 import SecurityLayout from "./layouts/SecurityLayout";
-import SecurityDashboard from "./pages/Securitydashboard";
 import FuelLayout from "./layouts/FuelLayout";
 import FuelDashboard from "./pages/FuelDashboard";
+import SecurityDashboard from "./pages/SecurityDashboard";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

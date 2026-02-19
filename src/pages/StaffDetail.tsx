@@ -9,18 +9,12 @@ import {
   Mail,
   Phone,
   Building2,
-  Shield,
   Calendar,
   Pencil,
   Trash2,
   PhoneCall,
-  AlertCircle,
-  Truck,
   UserCog,
   Hash,
-  CheckCircle2,
-  Clock,
-  MessageSquare,
   Cake,
   CreditCard,
   Home,
@@ -120,19 +114,6 @@ function formatDate(d?: string) {
 
 // ── Activity Log Logic ─────────────────────────────────────────────────────
 
-interface LogEntry {
-  id: number;
-  timestamp: string;
-  actor: string;
-  action: string;
-  icon: React.ElementType;
-  color: string;
-}
-
-function buildActivityLog(s: StaffMember): LogEntry[] {
-  return []; // Identity/Server will fill this later
-}
-
 // ── Info Row ───────────────────────────────────────────────────────────────
 
 function InfoRow({
@@ -212,12 +193,8 @@ function EditSheet({
   const [isSaving, setIsSaving] = useState(false);
   const [isCustomDept, setIsCustomDept] = useState(false);
 
-  const {
-    control,
-    handleSubmit,
-    setValue,
-    formState: { errors },
-  } = useForm<EditFormData>({
+  const { control, handleSubmit, setValue } = useForm<EditFormData>({
+    //@ts-ignore - zod version mismatch workaround
     resolver: zodResolver(editSchema),
     values: {
       name: staff.name,
