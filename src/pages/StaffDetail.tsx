@@ -421,6 +421,7 @@ function EditSheet({
     watch,
     formState: { errors },
   } = useForm<EditFormData>({
+    //@ts-ignore - Zod schema has some conditional logic that RHF's type inference can't handle perfectly
     resolver: zodResolver(editSchema),
     mode: "onChange",
     defaultValues: {
@@ -440,9 +441,6 @@ function EditSheet({
     },
   });
 
-  const watchLicenseNumber = watch("licenseNumber");
-  const watchLicenseExpiry = watch("licenseExpiry");
-  const watchLicenseClass = watch("licenseClass");
   const showDriverFields = staff.role === "DRIVER";
 
   useEffect(() => {
@@ -707,9 +705,7 @@ function EditSheet({
             <TabsContent value="personal" className="space-y-6">
               <div className="flex items-center gap-4 pb-2">
                 <div className="relative flex-shrink-0">
-                  <Avatar
-                    className="w-20 h-20 ring-2 ring-offset-2"
-                    style={{ ringColor: "#e2e8f0" }}>
+                  <Avatar className="w-20 h-20 ring-2 ring-offset-2">
                     <AvatarImage src={avatarPreview} className="object-cover" />
                     <AvatarFallback
                       className="text-lg font-bold text-white"

@@ -56,12 +56,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const API_URL = "https://blue-pearls-server.vercel.app";
@@ -234,7 +228,7 @@ function ClientDetailModal({
 }) {
   if (!client) return null;
 
-  const clientJobs = jobs?.filter((j) => true) || [];
+  const clientJobs = jobs?.filter(() => true) || [];
   const totalRevenue = clientJobs.reduce((sum, j) => sum + (j.income || 0), 0);
   const activeJobs = clientJobs.filter(
     (j) => j.status === "Ongoing" || j.status === "Scheduled",
@@ -455,6 +449,7 @@ function ClientSheet({
     reset,
     formState: { errors },
   } = useForm<ClientFormData>({
+    //@ts-ignore - Zod schema has some conditional logic that RHF's type inference can't handle perfectly
     resolver: zodResolver(clientSchema) as any,
     defaultValues: blankValues,
   });

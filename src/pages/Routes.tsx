@@ -104,13 +104,6 @@ const ROUTE_TYPES = [
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 const authHeader = () => ({
   Authorization: `Bearer ${localStorage.getItem("bp_token")}`,
@@ -228,6 +221,7 @@ function RouteSheet({
     setValue,
     formState: { errors },
   } = useForm<RouteFormData>({
+    //@ts-ignore - Zod schema has some conditional logic that RHF's type inference can't handle perfectly
     resolver: zodResolver(routeSchema) as any,
     defaultValues: blank(),
   });

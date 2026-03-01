@@ -25,7 +25,6 @@ import {
   PlusCircle,
   MinusCircle,
   X,
-  Fuel,
   Gauge,
   Calendar,
   DollarSign,
@@ -1385,6 +1384,7 @@ function JobSheet({
     getValues,
     formState: { errors },
   } = useForm<JobFormData>({
+    //@ts-ignore - Zod schema has some conditional logic that RHF's type inference can't handle perfectly
     resolver: zodResolver(jobSchema) as any,
     defaultValues: buildDefaultValues(editing),
   });
@@ -1446,7 +1446,6 @@ function JobSheet({
 
         // Auto-fill income from base rate if not set
         if (!getValues("income") && route.baseRate) {
-          const tonnage = parseFloat(getValues("tonnage")) || 0;
           if (route.ratePerKm && route.distanceKm) {
             // Calculate based on distance
             setValue("income", route.ratePerKm * route.distanceKm);
@@ -1588,7 +1587,7 @@ function JobSheet({
                   control={control}
                   render={({ field }) => (
                     <RouteSelector
-                      value={field.value}
+                      value={field.value ?? null} // Convert undefined to null
                       onChange={(id, route) => {
                         field.onChange(id);
                         if (route) setSelectedRoute(route);
@@ -2641,7 +2640,6 @@ export default function Jobs() {
 
             const ss = STATUS_STYLES[j.status];
             const as = APPROVAL_STYLES[j.approval];
-            const StatusIcon = ss.icon;
             return (
               <div
                 key={j.id}

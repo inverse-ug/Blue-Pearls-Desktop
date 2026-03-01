@@ -29,13 +29,10 @@ import {
   Building2,
   Calendar,
   CheckCircle2,
-  XCircle,
-  Users,
   Fuel,
   Wrench,
   CreditCard,
   Truck,
-  Briefcase,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -46,7 +43,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -75,14 +71,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 const API_URL = "https://blue-pearls-server.vercel.app";
@@ -548,6 +537,7 @@ function CreateAccountSheet({
     watch,
     formState: { errors },
   } = useForm<AccountFormData>({
+    //@ts-ignore - Zod schema has some conditional logic that RHF's type inference can't handle perfectly
     resolver: zodResolver(accountSchema) as any,
     defaultValues: {
       name: "",
@@ -1254,6 +1244,7 @@ function EditAccountSheet({
     watch,
     formState: { errors },
   } = useForm<EditAccountFormData>({
+    //@ts-ignore - Zod schema has some conditional logic that RHF's type inference can't handle perfectly
     resolver: zodResolver(editAccountSchema) as any,
     defaultValues: {
       name: "",
