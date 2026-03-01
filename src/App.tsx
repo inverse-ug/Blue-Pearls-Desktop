@@ -14,6 +14,7 @@ import Accounts from "./pages/Accounts";
 import Clients from "./pages/Clients";
 import Vehicles from "./pages/Vehicles";
 import Jobs from "./pages/Jobs";
+import AppRoutes from "./pages/Routes";
 import CreateJob from "./pages/CreateJob";
 
 // Layouts
@@ -224,6 +225,7 @@ function App() {
           <Route path="/vehicles" element={<Vehicles />} />
           <Route path="/jobs" element={<Jobs />} />
           <Route path="/clients" element={<Clients />} />
+          <Route path="/routes" element={<AppRoutes />} />
         </Route>
 
         {/* ── 2. IMPLANT UI ── */}

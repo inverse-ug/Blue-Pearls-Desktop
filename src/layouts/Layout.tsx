@@ -16,6 +16,7 @@ import {
   UserCircle2,
   Contact,
   Wallet,
+  Route,
 } from "lucide-react";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
@@ -25,11 +26,14 @@ export const C = {
   yellow: "#E1BA58",
   blue: "#7A80F0",
   red: "#EA7957",
-  bg: "#F0EFE9",
+  bg: "#F8F9FA",
   card: "#FFFFFF",
-  sidebar: "#2C2C2C",
-  muted: "#9E9E9E",
-  border: "#E8E8E8",
+  sidebar: "#FFFFFF",
+  muted: "#6B7280",
+  border: "#E5E7EB",
+  text: "#1F2937",
+  textLight: "#6B7280",
+  hover: "#F3F4F6",
 };
 
 // ── Nav items ──────────────────────────────────────────────────────────────
@@ -42,13 +46,14 @@ const NAV_ITEMS = [
   },
   { id: "staff", label: "Staff", path: "/staff", icon: Users },
   { id: "vehicles", label: "Vehicles", path: "/vehicles", icon: Truck },
+  { id: "clients", label: "Clients", path: "/clients", icon: Contact },
+  { id: "routes", label: "Lanes", path: "/routes", icon: Route },
   { id: "jobs", label: "Jobs", path: "/jobs", icon: Briefcase },
   { id: "accounts", label: "Accounts", path: "/accounts", icon: UserCircle2 },
-  { id: "clients", label: "Clients", path: "/clients", icon: Contact },
-  { id: "finances", label: "Finances", path: "/finances", icon: Wallet },
 ];
 
 const MORE_ITEMS = [
+  { id: "finances", label: "Finances", path: "/finances", icon: Wallet },
   { id: "reports", label: "Reports", path: "/reports", icon: FileBarChart2 },
   { id: "calendar", label: "Calendar", path: "/calendar", icon: Calendar },
 ];
@@ -180,9 +185,8 @@ function MorePopover({
             padding: "0 10px",
             width: expanded ? "160px" : "40px",
             overflow: "hidden",
-            background:
-              isActive || open ? "rgba(255,255,255,0.12)" : "transparent",
-            color: isActive || open ? "#fff" : "rgba(255,255,255,0.42)",
+            background: isActive || open ? C.hover : "transparent",
+            color: isActive || open ? C.blue : C.textLight,
             transition:
               "background 0.15s ease, color 0.15s ease, width 0.25s cubic-bezier(0.4,0,0.2,1)",
           }}>
@@ -203,7 +207,7 @@ function MorePopover({
           className="absolute left-full ml-3 bottom-0 z-50 w-44 rounded-xl overflow-hidden py-1.5"
           style={{
             background: C.card,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.14)",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
             border: `1px solid ${C.border}`,
             animation: "fadeIn 0.12s ease",
           }}>
@@ -214,8 +218,12 @@ function MorePopover({
                 navigate(path);
                 setOpen(false);
               }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[#F5F4EF]"
-              style={{ color: C.dark }}>
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors"
+              style={{ color: C.text, background: "transparent" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = C.hover)}
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "transparent")
+              }>
               <Icon size={14} style={{ color: C.muted }} />
               {label}
             </button>
@@ -239,16 +247,16 @@ function IconBtn({
       <button
         className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150"
         style={{
-          background: "rgba(255,255,255,0.07)",
-          color: "rgba(255,255,255,0.55)",
+          background: C.hover,
+          color: C.textLight,
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = "rgba(255,255,255,0.14)";
-          e.currentTarget.style.color = "#ffffff";
+          e.currentTarget.style.background = C.border;
+          e.currentTarget.style.color = C.blue;
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = "rgba(255,255,255,0.07)";
-          e.currentTarget.style.color = "rgba(255,255,255,0.55)";
+          e.currentTarget.style.background = C.hover;
+          e.currentTarget.style.color = C.textLight;
         }}>
         <Icon size={16} strokeWidth={1.75} />
       </button>
@@ -276,14 +284,12 @@ function ExpandToggle({
         width: "20px",
         height: "44px",
         borderRadius: "6px",
-        background: hovered
-          ? "rgba(255,255,255,0.18)"
-          : "rgba(255,255,255,0.08)",
-        border: `1px solid ${hovered ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.12)"}`,
-        boxShadow: hovered ? "0 0 0 3px rgba(255,255,255,0.04)" : "none",
+        background: hovered ? C.hover : C.card,
+        border: `1px solid ${hovered ? C.blue : C.border}`,
+        boxShadow: hovered ? "0 0 0 3px rgba(122,128,240,0.1)" : "none",
         transition: "all 0.18s ease",
         cursor: "pointer",
-        color: hovered ? "#ffffff" : "rgba(255,255,255,0.45)",
+        color: hovered ? C.blue : C.textLight,
       }}
       title={expanded ? "Collapse sidebar" : "Expand sidebar"}>
       <svg
@@ -322,16 +328,8 @@ function NavButton({
   icon: React.ElementType;
 }) {
   const [hovered, setHovered] = useState(false);
-  const bg = isActive
-    ? "rgba(255,255,255,0.13)"
-    : hovered
-      ? "rgba(255,255,255,0.07)"
-      : "transparent";
-  const color = isActive
-    ? "#ffffff"
-    : hovered
-      ? "rgba(255,255,255,0.75)"
-      : "rgba(255,255,255,0.42)";
+  const bg = isActive ? C.hover : hovered ? C.hover : "transparent";
+  const color = isActive ? C.blue : hovered ? C.text : C.textLight;
 
   return (
     <button
@@ -340,7 +338,6 @@ function NavButton({
       onMouseLeave={() => setHovered(false)}
       className="h-10 rounded-xl flex items-center gap-3"
       style={{
-        // Equal 10px padding on both sides; width grows when expanded
         padding: "0 10px",
         width: expanded ? "160px" : "40px",
         background: bg,
@@ -401,7 +398,6 @@ export default function Layout() {
     setRefreshKey((k) => k + 1);
   }
 
-  // ── Logic: Logout ────────────────────────────────────────────────────────
   function handleLogout() {
     localStorage.removeItem("bp_token");
     localStorage.removeItem("bp_user");
@@ -411,11 +407,13 @@ export default function Layout() {
   return (
     <div
       className="flex flex-col h-screen w-full overflow-hidden"
-      style={{ fontFamily: "'Inter', sans-serif", background: C.sidebar }}>
+      style={{ fontFamily: "'Inter', sans-serif", background: C.bg }}>
       <NavLoader active={navigating} />
 
       {/* ── Top bar ── */}
-      <header className="flex items-center h-[60px] flex-shrink-0 px-5">
+      <header
+        className="flex items-center h-[60px] flex-shrink-0 px-5"
+        style={{ background: C.card, borderBottom: `1px solid ${C.border}` }}>
         <div
           className="flex items-center justify-center flex-shrink-0 transition-all duration-300"
           style={{ width: `${SIDEBAR_W_COLLAPSED}px` }}>
@@ -426,7 +424,9 @@ export default function Layout() {
           />
         </div>
 
-        <h1 className="flex-1 text-white text-base font-bold tracking-tight pl-3">
+        <h1
+          className="flex-1 text-base font-bold tracking-tight pl-3"
+          style={{ color: C.text }}>
           {pageTitle}
         </h1>
 
@@ -435,17 +435,14 @@ export default function Layout() {
             <button
               onClick={handleRefresh}
               className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150"
-              style={{
-                background: "rgba(255,255,255,0.07)",
-                color: "rgba(255,255,255,0.45)",
-              }}
+              style={{ background: C.hover, color: C.textLight }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(255,255,255,0.14)";
-                e.currentTarget.style.color = "#ffffff";
+                e.currentTarget.style.background = C.border;
+                e.currentTarget.style.color = C.blue;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "rgba(255,255,255,0.07)";
-                e.currentTarget.style.color = "rgba(255,255,255,0.45)";
+                e.currentTarget.style.background = C.hover;
+                e.currentTarget.style.color = C.textLight;
               }}>
               <svg
                 width="15"
@@ -474,7 +471,7 @@ export default function Layout() {
       </header>
 
       {/* ── Body ── */}
-      <div className="flex flex-1 overflow-hidden px-3 pb-3">
+      <div className="flex flex-1 overflow-hidden p-3">
         {/* Sidebar + toggle wrapper */}
         <div
           className="relative flex-shrink-0 flex"
@@ -482,7 +479,13 @@ export default function Layout() {
             width: `${sidebarW}px`,
             transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
           }}>
-          <aside className="flex flex-col items-center py-4 w-full">
+          <aside
+            className="flex flex-col items-center py-4 w-full"
+            style={{
+              background: C.card,
+              borderRadius: "20px",
+              border: `1px solid ${C.border}`,
+            }}>
             <nav className="flex flex-col items-center gap-2.5 flex-1 w-full py-0">
               {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
                 const isActive = activePath === path;
@@ -536,8 +539,12 @@ export default function Layout() {
         {/* Content area */}
         <div
           key={refreshKey}
-          className="flex-1 overflow-hidden"
-          style={{ background: C.bg, borderRadius: "20px" }}>
+          className="flex-1 overflow-hidden ml-3"
+          style={{
+            background: C.card,
+            borderRadius: "20px",
+            border: `1px solid ${C.border}`,
+          }}>
           <Outlet />
         </div>
       </div>
@@ -553,15 +560,15 @@ export default function Layout() {
         }
         * {
           scrollbar-width: thin;
-          scrollbar-color: rgba(44,44,44,0.12) transparent;
+          scrollbar-color: ${C.muted} transparent;
         }
         *::-webkit-scrollbar { width: 5px; height: 5px; }
         *::-webkit-scrollbar-track { background: transparent; }
         *::-webkit-scrollbar-thumb {
-          background: rgba(44,44,44,0.13);
+          background: ${C.muted}20;
           border-radius: 99px;
         }
-        *::-webkit-scrollbar-thumb:hover { background: rgba(44,44,44,0.28); }
+        *::-webkit-scrollbar-thumb:hover { background: ${C.muted}40; }
         *::-webkit-scrollbar-corner { background: transparent; }
       `}</style>
     </div>

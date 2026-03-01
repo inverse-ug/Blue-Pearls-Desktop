@@ -27,8 +27,17 @@ import {
   Key,
   MapPin,
   Building2,
+  Calendar,
+  CheckCircle2,
+  XCircle,
+  Users,
+  Fuel,
+  Wrench,
+  CreditCard,
+  Truck,
+  Briefcase,
+  X,
 } from "lucide-react";
-import { C } from "../layouts/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -37,6 +46,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -45,12 +55,14 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
+  DialogClose,
 } from "@/components/ui/dialog";
 import {
   Sheet,
   SheetContent,
   SheetTitle,
   SheetDescription,
+  SheetClose,
 } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import {
@@ -61,9 +73,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 const API_URL = "https://blue-pearls-server.vercel.app";
+const SKY_BLUE = "#06a3d8";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -75,7 +98,11 @@ export type Role =
   | "TRUCK_COORDINATOR"
   | "DRIVER"
   | "SECURITY_GUARD"
-  | "FUEL_AGENT";
+  | "FUEL_AGENT"
+  | "FUEL_MANAGER"
+  | "ALLOWANCE_MANAGER"
+  | "WORKSHOP_MANAGER"
+  | "FINANCE_MANAGER";
 
 export interface Account {
   id: number;
@@ -88,6 +115,8 @@ export interface Account {
   placementName?: string | null;
   placementAddress?: string | null;
   avatarUrl?: string | null;
+  isActive: boolean;
+  lastLogin?: string | null;
   createdAt: string;
 }
 
@@ -98,6 +127,7 @@ export interface StaffOption {
   avatarUrl?: string | null;
   placementId?: number | null;
   placementName?: string | null;
+  role?: Role | null; // ✅ Added role field
 }
 
 export interface Client {
@@ -119,17 +149,28 @@ export const ROLE_LABELS: Record<Role, string> = {
   DRIVER: "Driver",
   SECURITY_GUARD: "Security Guard",
   FUEL_AGENT: "Fuel Agent",
+  FUEL_MANAGER: "Fuel Manager",
+  ALLOWANCE_MANAGER: "Allowance Manager",
+  WORKSHOP_MANAGER: "Workshop Manager",
+  FINANCE_MANAGER: "Finance Manager",
 };
 
-export const ROLE_COLORS: Record<Role, { color: string; bg: string }> = {
-  SUPER_ADMIN: { color: "#7A80F0", bg: "#7A80F018" },
-  MANAGER: { color: "#1e6ea6", bg: "#1e6ea618" },
-  IMPLANT: { color: "#8CA573", bg: "#8CA57318" },
-  PSV_COORDINATOR: { color: "#059669", bg: "#05966918" },
-  TRUCK_COORDINATOR: { color: "#b8922a", bg: "#E1BA5822" },
-  DRIVER: { color: "#9E9E9E", bg: "#9E9E9E18" },
-  SECURITY_GUARD: { color: "#EA7957", bg: "#EA795718" },
-  FUEL_AGENT: { color: "#0891b2", bg: "#0891b218" },
+export const ROLE_COLORS: Record<
+  Role,
+  { color: string; bg: string; icon: any }
+> = {
+  SUPER_ADMIN: { color: "#7A80F0", bg: "#7A80F018", icon: ShieldCheck },
+  MANAGER: { color: SKY_BLUE, bg: `${SKY_BLUE}18`, icon: ShieldCheck },
+  IMPLANT: { color: "#8CA573", bg: "#8CA57318", icon: Building2 },
+  PSV_COORDINATOR: { color: "#059669", bg: "#05966918", icon: Truck },
+  TRUCK_COORDINATOR: { color: "#b8922a", bg: "#E1BA5822", icon: Truck },
+  DRIVER: { color: "#9E9E9E", bg: "#9E9E9E18", icon: Truck },
+  SECURITY_GUARD: { color: "#EA7957", bg: "#EA795718", icon: ShieldCheck },
+  FUEL_AGENT: { color: SKY_BLUE, bg: `${SKY_BLUE}18`, icon: Fuel },
+  FUEL_MANAGER: { color: SKY_BLUE, bg: `${SKY_BLUE}18`, icon: Fuel },
+  ALLOWANCE_MANAGER: { color: "#8b5cf6", bg: "#8b5cf618", icon: CreditCard },
+  WORKSHOP_MANAGER: { color: "#f97316", bg: "#f9731618", icon: Wrench },
+  FINANCE_MANAGER: { color: "#16a34a", bg: "#16a34a18", icon: CreditCard },
 };
 
 export const ALL_ROLES: Role[] = [
@@ -141,9 +182,19 @@ export const ALL_ROLES: Role[] = [
   "DRIVER",
   "SECURITY_GUARD",
   "FUEL_AGENT",
+  "FUEL_MANAGER",
+  "ALLOWANCE_MANAGER",
+  "WORKSHOP_MANAGER",
+  "FINANCE_MANAGER",
 ];
 
-type SortKey = "name" | "email" | "role" | "placement" | "createdAt";
+type SortKey =
+  | "name"
+  | "email"
+  | "role"
+  | "placement"
+  | "createdAt"
+  | "lastLogin";
 type SortDir = "asc" | "desc";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -159,12 +210,13 @@ function getInitials(name: string) {
 
 const AVATAR_COLORS = [
   "#1a3a5c",
-  C.blue,
-  C.green,
+  SKY_BLUE,
+  "#16a34a",
   "#8B5CF6",
   "#0891b2",
   "#059669",
 ];
+
 function avatarColor(id: number) {
   return AVATAR_COLORS[id % AVATAR_COLORS.length];
 }
@@ -177,21 +229,32 @@ function generatePassword(length = 12): string {
   ).join("");
 }
 
+function formatDate(date?: string | null) {
+  if (!date) return "—";
+  return new Date(date).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatDateTime(date?: string | null) {
+  if (!date) return "—";
+  return new Date(date).toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 // ── Zod Schema ────────────────────────────────────────────────────────────────
 
 const accountSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().min(1, "Email is required").email("Enter a valid email"),
-  role: z.enum([
-    "IMPLANT",
-    "MANAGER",
-    "SUPER_ADMIN",
-    "PSV_COORDINATOR",
-    "TRUCK_COORDINATOR",
-    "DRIVER",
-    "SECURITY_GUARD",
-    "FUEL_AGENT",
-  ]),
+  role: z.enum(ALL_ROLES as [Role, ...Role[]]),
   password: z.string().min(6, "Password must be at least 6 characters"),
   staffId: z.number().nullable().optional(),
   placementId: z.number().nullable().optional(),
@@ -201,16 +264,7 @@ const accountSchema = z.object({
 const editAccountSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().min(1, "Email is required").email("Enter a valid email"),
-  role: z.enum([
-    "IMPLANT",
-    "MANAGER",
-    "SUPER_ADMIN",
-    "PSV_COORDINATOR",
-    "TRUCK_COORDINATOR",
-    "DRIVER",
-    "SECURITY_GUARD",
-    "FUEL_AGENT",
-  ]),
+  role: z.enum(ALL_ROLES as [Role, ...Role[]]),
   staffId: z.number().nullable().optional(),
   placementId: z.number().nullable().optional(),
   password: z
@@ -219,6 +273,7 @@ const editAccountSchema = z.object({
     .optional()
     .or(z.literal("")),
   sendCredentials: z.boolean().default(false),
+  isActive: z.boolean().default(true),
 });
 
 type AccountFormData = z.infer<typeof accountSchema>;
@@ -244,7 +299,7 @@ function SortHeader({
     <button
       onClick={() => onSort(sortKey)}
       className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest transition-colors"
-      style={{ color: active ? C.dark : C.muted }}>
+      style={{ color: active ? "#0f172a" : "#64748b" }}>
       {label}
       <span className="opacity-60">
         {active ? (
@@ -258,6 +313,204 @@ function SortHeader({
         )}
       </span>
     </button>
+  );
+}
+
+// ── Account Detail Modal ──────────────────────────────────────────────────────
+
+function AccountDetailModal({
+  open,
+  onClose,
+  account,
+}: {
+  open: boolean;
+  onClose: () => void;
+  account: Account | null;
+}) {
+  if (!account) return null;
+
+  const roleStyle = ROLE_COLORS[account.role];
+  const RoleIcon = roleStyle.icon;
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+        <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b flex items-center justify-between">
+          <DialogTitle className="text-xl font-bold flex items-center gap-2 text-slate-900">
+            <span>Account Details</span>
+            <Badge variant="outline" className="text-xs">
+              #{String(account.id).padStart(4, "0")}
+            </Badge>
+          </DialogTitle>
+          <DialogClose className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100">
+            <X className="h-5 w-5" />
+            <span className="sr-only">Close</span>
+          </DialogClose>
+        </div>
+
+        <div className="p-6">
+          {/* Header */}
+          <div className="flex items-center gap-4 mb-6">
+            <Avatar className="w-16 h-16">
+              <AvatarImage src={account.avatarUrl || ""} />
+              <AvatarFallback
+                className="text-lg font-bold text-white"
+                style={{ background: avatarColor(account.id) }}>
+                {getInitials(account.name)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h3 className="text-xl font-bold text-slate-900">
+                {account.name}
+              </h3>
+              <p className="text-sm text-slate-500">{account.email}</p>
+              <div className="flex items-center gap-2 mt-2">
+                <div
+                  className="flex items-center gap-1 px-2 py-1 rounded-md"
+                  style={{ background: roleStyle.bg }}>
+                  <RoleIcon size={12} style={{ color: roleStyle.color }} />
+                  <span className="text-xs" style={{ color: roleStyle.color }}>
+                    {ROLE_LABELS[account.role]}
+                  </span>
+                </div>
+                <Badge
+                  className="text-xs"
+                  style={{
+                    background: account.isActive ? "#16a34a18" : "#ef444418",
+                    color: account.isActive ? "#16a34a" : "#ef4444",
+                  }}>
+                  {account.isActive ? "Active" : "Inactive"}
+                </Badge>
+              </div>
+            </div>
+          </div>
+
+          <Tabs defaultValue="details" className="w-full">
+            <TabsList className="grid grid-cols-3 w-full mb-6">
+              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="staff">Linked Staff</TabsTrigger>
+              <TabsTrigger value="activity">Activity</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="details" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <InfoItem icon={Mail} label="Email" value={account.email} />
+                <InfoItem
+                  icon={Calendar}
+                  label="Created"
+                  value={formatDate(account.createdAt)}
+                />
+                <InfoItem
+                  icon={Clock}
+                  label="Last Login"
+                  value={formatDateTime(account.lastLogin)}
+                />
+                <InfoItem
+                  icon={ShieldCheck}
+                  label="Role"
+                  value={ROLE_LABELS[account.role]}
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="staff">
+              {account.staffId ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl">
+                    <Avatar className="w-10 h-10">
+                      <AvatarFallback
+                        style={{ background: avatarColor(account.staffId) }}>
+                        {getInitials(account.staffName || "")}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {account.staffName}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Staff ID: #{String(account.staffId).padStart(4, "0")}
+                      </p>
+                    </div>
+                  </div>
+                  {account.staffPlacementId && (
+                    <div className="p-4 bg-slate-50 rounded-xl">
+                      <p className="text-xs font-semibold text-slate-500 mb-2">
+                        Placement
+                      </p>
+                      <div className="flex items-start gap-2">
+                        <Building2
+                          size={14}
+                          className="text-slate-400 mt-0.5"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">
+                            {account.placementName}
+                          </p>
+                          {account.placementAddress && (
+                            <p className="text-xs text-slate-500">
+                              {account.placementAddress}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <Link2 size={32} className="mx-auto mb-3 text-slate-300" />
+                  <p>No staff member linked to this account.</p>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="activity">
+              <div className="text-center py-8 text-slate-500">
+                <Clock size={32} className="mx-auto mb-3 text-slate-300" />
+                <p>Activity log coming soon.</p>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InfoItem({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: any;
+  label: string;
+  value?: string | null;
+}) {
+  if (!value) return null;
+  return (
+    <div className="flex items-start gap-2">
+      <Icon size={14} className="text-slate-400 mt-0.5" />
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          {label}
+        </p>
+        <p className="text-sm text-slate-900">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function Clock(props: any) {
+  return (
+    <svg
+      {...props}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
   );
 }
 
@@ -295,7 +548,6 @@ function CreateAccountSheet({
     watch,
     formState: { errors },
   } = useForm<AccountFormData>({
-    // @ts-ignore - zodResolver types are messed up
     resolver: zodResolver(accountSchema) as any,
     defaultValues: {
       name: "",
@@ -334,6 +586,13 @@ function CreateAccountSheet({
     setValue("staffId", s.id);
     setValue("name", s.name);
     if (s.officialEmail) setValue("email", s.officialEmail);
+
+    // ✅ Prefill the role from the staff member
+    if (s.role) {
+      setValue("role", s.role);
+    }
+
+    // ✅ Prefill placement if the staff has one
     if (s.placementId) {
       const client = clients.find((c) => c.id === s.placementId);
       if (client) {
@@ -350,6 +609,7 @@ function CreateAccountSheet({
     setValue("staffId", null);
     setValue("name", "");
     setValue("email", "");
+    setValue("role", "DRIVER"); // Reset to default
     setValue("placementId", null);
     setSelectedPlacement(null);
   }
@@ -403,553 +663,555 @@ function CreateAccountSheet({
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && !isSaving && handleClose()}>
-      <SheetContent
-        className="w-[460px] sm:w-[520px] overflow-y-auto !p-0"
-        style={{ fontFamily: "'Inter', sans-serif" }}>
-        <div
-          className="px-7 py-6"
-          style={{ borderBottom: `1px solid ${C.border}` }}>
-          <SheetTitle className="text-lg font-bold" style={{ color: C.dark }}>
-            Create Account
-          </SheetTitle>
-          <SheetDescription className="mt-1 text-sm" style={{ color: C.muted }}>
-            Set up a new user account with login credentials.
-          </SheetDescription>
+      <SheetContent className="w-[600px] sm:max-w-[600px] overflow-y-auto !p-0">
+        <div className="sticky top-0 bg-white z-10 px-7 py-5 border-b flex items-center justify-between">
+          <div>
+            <SheetTitle className="text-xl font-bold text-slate-900">
+              Create Account
+            </SheetTitle>
+            <SheetDescription className="mt-1 text-sm text-slate-500">
+              Set up a new user account with login credentials.
+            </SheetDescription>
+          </div>
+          <SheetClose className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100">
+            <X className="h-5 w-5" />
+            <span className="sr-only">Close</span>
+          </SheetClose>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} noValidate>
-          <div className="px-7 py-6 space-y-5">
-            {/* Link Staff Section */}
-            <div
-              className="rounded-2xl p-4"
-              style={{
-                background: "#F5F4EF",
-                border: `1px solid ${C.border}`,
-              }}>
-              <p
-                className="text-[10px] font-semibold uppercase tracking-widest mb-3"
-                style={{ color: C.muted }}>
-                Step 1 — Link a Staff Member (optional)
-              </p>
+        <ScrollArea className="h-[calc(100vh-120px)] px-7 py-6">
+          <form onSubmit={handleSubmit(onSubmit)} noValidate>
+            <div className="space-y-6">
+              {/* Link Staff Section */}
+              <div
+                className="rounded-2xl p-5"
+                style={{
+                  background: "#F5F4EF",
+                  border: `1px solid #e2e8f0`,
+                }}>
+                <p className="text-xs font-semibold mb-3 text-slate-700">
+                  Step 1 — Link a Staff Member (optional)
+                </p>
 
-              {linkedStaff ? (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                      style={{ background: avatarColor(linkedStaff.id) }}>
-                      {getInitials(linkedStaff.name)}
-                    </div>
-                    <div>
-                      <p
-                        className="text-sm font-semibold"
-                        style={{ color: C.dark }}>
-                        {linkedStaff.name}
-                      </p>
-                      <p className="text-[11px]" style={{ color: C.muted }}>
-                        Staff ID #{String(linkedStaff.id).padStart(4, "0")}
-                      </p>
-                      {linkedStaff.placementName && (
-                        <p
-                          className="text-[10px] flex items-center gap-1 mt-0.5"
-                          style={{ color: C.muted }}>
-                          <MapPin size={8} /> Current:{" "}
-                          {linkedStaff.placementName}
+                {linkedStaff ? (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="w-10 h-10">
+                        <AvatarFallback
+                          className="text-white text-sm font-bold"
+                          style={{ background: avatarColor(linkedStaff.id) }}>
+                          {getInitials(linkedStaff.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {linkedStaff.name}
                         </p>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleUnlink}
-                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-red-50"
-                    style={{ color: C.red }}>
-                    <Unlink size={12} /> Unlink
-                  </button>
-                </div>
-              ) : (
-                <div className="relative">
-                  {showStaffPicker ? (
-                    <div>
-                      <div className="relative mb-2">
-                        <Search
-                          size={13}
-                          className="absolute left-3 top-1/2 -translate-y-1/2"
-                          style={{ color: C.muted }}
-                        />
-                        <Input
-                          autoFocus
-                          value={staffSearch}
-                          onChange={(e) => setStaffSearch(e.target.value)}
-                          placeholder="Search staff by name…"
-                          className="pl-9 h-9 rounded-xl text-sm bg-white"
-                        />
-                      </div>
-                      <div
-                        className="rounded-xl overflow-hidden max-h-44 overflow-y-auto"
-                        style={{
-                          background: "#fff",
-                          border: `1px solid ${C.border}`,
-                        }}>
-                        {filteredStaff.length === 0 ? (
-                          <p
-                            className="text-xs text-center py-6"
-                            style={{ color: C.muted }}>
-                            No staff found
+                        <p className="text-[11px] text-slate-500">
+                          Staff ID #{String(linkedStaff.id).padStart(4, "0")}
+                        </p>
+                        {linkedStaff.role && (
+                          <p className="text-[10px] flex items-center gap-1 mt-0.5 text-slate-500">
+                            <ShieldCheck size={8} /> Role:{" "}
+                            {ROLE_LABELS[linkedStaff.role]}
                           </p>
-                        ) : (
-                          filteredStaff.map((s) => (
-                            <button
-                              key={s.id}
-                              type="button"
-                              onClick={() => handleLinkStaff(s)}
-                              className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[#F5F4EF] text-left"
-                              style={{
-                                borderBottom: `1px solid ${C.border}`,
-                              }}>
-                              <div
-                                className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                                style={{ background: avatarColor(s.id) }}>
-                                {getInitials(s.name)}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p
-                                  className="text-sm font-medium truncate"
-                                  style={{ color: C.dark }}>
-                                  {s.name}
-                                </p>
-                                {s.placementName && (
-                                  <p
-                                    className="text-[10px] flex items-center gap-1"
-                                    style={{ color: C.muted }}>
-                                    <MapPin size={8} /> {s.placementName}
-                                  </p>
-                                )}
-                              </div>
-                            </button>
-                          ))
+                        )}
+                        {linkedStaff.placementName && (
+                          <p className="text-[10px] flex items-center gap-1 mt-0.5 text-slate-500">
+                            <MapPin size={8} /> Current:{" "}
+                            {linkedStaff.placementName}
+                          </p>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowStaffPicker(false)}
-                        className="mt-2 text-xs font-medium"
-                        style={{ color: C.muted }}>
-                        Cancel
-                      </button>
                     </div>
-                  ) : (
                     <button
                       type="button"
-                      onClick={() => setShowStaffPicker(true)}
-                      className="w-full flex items-center gap-2 justify-center h-10 rounded-xl text-sm font-medium transition-colors hover:bg-white border-dashed border-2"
-                      style={{
-                        color: C.muted,
-                        borderColor: C.border,
-                      }}>
-                      <Link2 size={14} /> Link a Staff Member
+                      onClick={handleUnlink}
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-red-50 text-red-500">
+                      <Unlink size={12} /> Unlink
                     </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Account Details Section */}
-            <div>
-              <p
-                className="text-[10px] font-semibold uppercase tracking-widest mb-3"
-                style={{ color: C.muted }}>
-                Step 2 — Account Details
-              </p>
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label
-                    className="text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: C.muted }}>
-                    Full Name *
-                  </Label>
-                  <Controller
-                    name="name"
-                    control={control}
-                    render={({ field }) => (
-                      <Input
-                        {...field}
-                        placeholder="e.g. Moses Okello"
-                        className="h-10 rounded-xl text-sm"
-                        readOnly={!!linkedStaff}
-                        style={
-                          linkedStaff
-                            ? { background: "#F5F4EF", color: C.muted }
-                            : {}
-                        }
-                      />
-                    )}
-                  />
-                  {errors.name && (
-                    <p className="text-xs text-red-500">
-                      {errors.name.message}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label
-                    className="text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: C.muted }}>
-                    Email Address *
-                  </Label>
+                  </div>
+                ) : (
                   <div className="relative">
-                    <Mail
-                      size={14}
-                      className="absolute left-3 top-1/2 -translate-y-1/2"
-                      style={{ color: C.muted }}
-                    />
+                    {showStaffPicker ? (
+                      <div>
+                        <div className="relative mb-2">
+                          <Search
+                            size={13}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                          />
+                          <Input
+                            autoFocus
+                            value={staffSearch}
+                            onChange={(e) => setStaffSearch(e.target.value)}
+                            placeholder="Search staff by name…"
+                            className="pl-9 h-9 rounded-xl text-sm bg-white"
+                          />
+                        </div>
+                        <div
+                          className="rounded-xl overflow-hidden max-h-44 overflow-y-auto border"
+                          style={{
+                            background: "#fff",
+                            borderColor: "#e2e8f0",
+                          }}>
+                          {filteredStaff.length === 0 ? (
+                            <p className="text-xs text-center py-6 text-slate-500">
+                              No staff found
+                            </p>
+                          ) : (
+                            filteredStaff.map((s) => (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => handleLinkStaff(s)}
+                                className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[#F5F4EF] text-left border-b last:border-0"
+                                style={{ borderColor: "#e2e8f0" }}>
+                                <Avatar className="w-7 h-7">
+                                  <AvatarFallback
+                                    className="text-white text-[10px] font-bold"
+                                    style={{ background: avatarColor(s.id) }}>
+                                    {getInitials(s.name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium truncate text-slate-900">
+                                    {s.name}
+                                  </p>
+                                  <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                    {s.role && (
+                                      <span className="flex items-center gap-0.5">
+                                        <ShieldCheck size={8} />
+                                        {ROLE_LABELS[s.role]}
+                                      </span>
+                                    )}
+                                    {s.placementName && (
+                                      <span className="flex items-center gap-0.5">
+                                        <MapPin size={8} />
+                                        {s.placementName}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowStaffPicker(false)}
+                          className="mt-2 text-xs font-medium text-slate-500">
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowStaffPicker(true)}
+                        className="w-full flex items-center gap-2 justify-center h-10 rounded-xl text-sm font-medium transition-colors hover:bg-white border-dashed border-2"
+                        style={{
+                          color: "#64748b",
+                          borderColor: "#e2e8f0",
+                        }}>
+                        <Link2 size={14} /> Link a Staff Member
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Account Details Section */}
+              <div>
+                <p className="text-xs font-semibold mb-3 text-slate-700">
+                  Step 2 — Account Details
+                </p>
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700">
+                      Full Name *
+                    </Label>
                     <Controller
-                      name="email"
+                      name="name"
                       control={control}
                       render={({ field }) => (
                         <Input
                           {...field}
-                          type="email"
-                          placeholder="user@bluepearls.co.ug"
-                          className="h-10 rounded-xl text-sm pl-9"
-                          readOnly={
-                            !!linkedStaff && !!linkedStaff.officialEmail
-                          }
+                          placeholder="e.g. Moses Okello"
+                          className="h-10 rounded-xl text-sm"
+                          readOnly={!!linkedStaff}
                           style={
-                            linkedStaff && linkedStaff.officialEmail
-                              ? { background: "#F5F4EF", color: C.muted }
+                            linkedStaff
+                              ? { background: "#F5F4EF", color: "#64748b" }
                               : {}
                           }
                         />
                       )}
                     />
-                  </div>
-                  {errors.email && (
-                    <p className="text-xs text-red-500">
-                      {errors.email.message}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label
-                    className="text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: C.muted }}>
-                    Role *
-                  </Label>
-                  <Controller
-                    name="role"
-                    control={control}
-                    render={({ field }) => (
-                      <Select
-                        value={field.value}
-                        onValueChange={field.onChange}>
-                        <SelectTrigger className="h-10 rounded-xl text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ALL_ROLES.map((r) => (
-                            <SelectItem key={r} value={r}>
-                              {ROLE_LABELS[r]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-
-                {/* Placement Section - Only shown for IMPLANT role */}
-                {selectedRole === "IMPLANT" && (
-                  <div
-                    className="rounded-2xl p-4 mt-2"
-                    style={{
-                      background: "#F5F4EF",
-                      border: `1px solid ${C.border}`,
-                    }}>
-                    <p
-                      className="text-[10px] font-semibold uppercase tracking-widest mb-3 flex items-center gap-1"
-                      style={{ color: C.muted }}>
-                      <MapPin size={12} /> Step 2b — Placement Location *
-                    </p>
-
-                    {selectedPlacement ? (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                            style={{ background: `${C.blue}18` }}>
-                            <Building2 size={16} style={{ color: C.blue }} />
-                          </div>
-                          <div>
-                            <p
-                              className="text-sm font-semibold"
-                              style={{ color: C.dark }}>
-                              {selectedPlacement.name}
-                            </p>
-                            {selectedPlacement.address && (
-                              <p
-                                className="text-[10px]"
-                                style={{ color: C.muted }}>
-                                {selectedPlacement.address}
-                              </p>
-                            )}
-                            {selectedPlacement.contactPerson && (
-                              <p
-                                className="text-[10px] flex items-center gap-1 mt-0.5"
-                                style={{ color: C.muted }}>
-                                <UserCircle2 size={8} />{" "}
-                                {selectedPlacement.contactPerson}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleRemovePlacement}
-                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-red-50"
-                          style={{ color: C.red }}>
-                          <Trash2 size={12} /> Remove
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="relative">
-                        {showPlacementPicker ? (
-                          <div>
-                            <div className="relative mb-2">
-                              <Search
-                                size={13}
-                                className="absolute left-3 top-1/2 -translate-y-1/2"
-                                style={{ color: C.muted }}
-                              />
-                              <Input
-                                autoFocus
-                                value={clientSearch}
-                                onChange={(e) =>
-                                  setClientSearch(e.target.value)
-                                }
-                                placeholder="Search clients…"
-                                className="pl-9 h-9 rounded-xl text-sm bg-white"
-                              />
-                            </div>
-                            <div
-                              className="rounded-xl overflow-hidden max-h-60 overflow-y-auto"
-                              style={{
-                                background: "#fff",
-                                border: `1px solid ${C.border}`,
-                              }}>
-                              {filteredClients.length === 0 ? (
-                                <p
-                                  className="text-xs text-center py-6"
-                                  style={{ color: C.muted }}>
-                                  No clients found
-                                </p>
-                              ) : (
-                                filteredClients.map((client) => (
-                                  <button
-                                    key={client.id}
-                                    type="button"
-                                    onClick={() =>
-                                      handleSelectPlacement(client)
-                                    }
-                                    className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#F5F4EF] text-left"
-                                    style={{
-                                      borderBottom: `1px solid ${C.border}`,
-                                    }}>
-                                    <div
-                                      className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                                      style={{ background: `${C.green}18` }}>
-                                      <Building2
-                                        size={12}
-                                        style={{ color: C.green }}
-                                      />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                      <p
-                                        className="text-sm font-medium truncate"
-                                        style={{ color: C.dark }}>
-                                        {client.name}
-                                      </p>
-                                      {client.address && (
-                                        <p
-                                          className="text-[10px] truncate"
-                                          style={{ color: C.muted }}>
-                                          {client.address}
-                                        </p>
-                                      )}
-                                      {client.contactPerson && (
-                                        <p
-                                          className="text-[10px] truncate"
-                                          style={{ color: C.muted }}>
-                                          Contact: {client.contactPerson}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </button>
-                                ))
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setShowPlacementPicker(false)}
-                              className="mt-2 text-xs font-medium"
-                              style={{ color: C.muted }}>
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setShowPlacementPicker(true)}
-                            className="w-full flex items-center gap-2 justify-center h-10 rounded-xl text-sm font-medium transition-colors hover:bg-white border-dashed border-2"
-                            style={{
-                              color: C.muted,
-                              borderColor: C.border,
-                            }}>
-                            <MapPin size={14} /> Select Client Location
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {errors.placementId && (
-                      <p className="text-xs text-red-500 mt-2">
-                        {errors.placementId.message}
+                    {errors.name && (
+                      <p className="text-xs text-red-500">
+                        {errors.name.message}
                       </p>
                     )}
                   </div>
-                )}
-              </div>
-            </div>
 
-            {/* Password Section */}
-            <div>
-              <p
-                className="text-[10px] font-semibold uppercase tracking-widest mb-3"
-                style={{ color: C.muted }}>
-                Step 3 — Set Password
-              </p>
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label
-                      className="text-xs font-semibold uppercase tracking-wider"
-                      style={{ color: C.muted }}>
-                      Password *
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700">
+                      Email Address *
                     </Label>
-                    <button
-                      type="button"
-                      onClick={handleAutoGenerate}
-                      className="flex items-center gap-1 text-xs font-medium transition-colors"
-                      style={{ color: C.blue }}>
-                      <RefreshCw size={11} /> Auto-generate
-                    </button>
+                    <div className="relative">
+                      <Mail
+                        size={14}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+                      <Controller
+                        name="email"
+                        control={control}
+                        render={({ field }) => (
+                          <Input
+                            {...field}
+                            type="email"
+                            placeholder="user@bluepearls.co.ug"
+                            className="h-10 rounded-xl text-sm pl-9"
+                            readOnly={
+                              !!linkedStaff && !!linkedStaff.officialEmail
+                            }
+                            style={
+                              linkedStaff && linkedStaff.officialEmail
+                                ? { background: "#F5F4EF", color: "#64748b" }
+                                : {}
+                            }
+                          />
+                        )}
+                      />
+                    </div>
+                    {errors.email && (
+                      <p className="text-xs text-red-500">
+                        {errors.email.message}
+                      </p>
+                    )}
                   </div>
-                  <div className="relative">
-                    <Lock
-                      size={14}
-                      className="absolute left-3 top-1/2 -translate-y-1/2"
-                      style={{ color: C.muted }}
-                    />
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700">
+                      Role *
+                    </Label>
                     <Controller
-                      name="password"
+                      name="role"
                       control={control}
                       render={({ field }) => (
-                        <Input
-                          {...field}
-                          type={showPassword ? "text" : "password"}
-                          placeholder="••••••••••••"
-                          className="h-10 rounded-xl text-sm pl-9 pr-10 font-mono"
-                        />
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}>
+                          <SelectTrigger className="h-10 rounded-xl text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ALL_ROLES.map((r) => {
+                              const roleColor = ROLE_COLORS[r];
+                              return (
+                                <SelectItem key={r} value={r}>
+                                  <div className="flex items-center gap-2">
+                                    <div
+                                      className="w-4 h-4 rounded flex items-center justify-center"
+                                      style={{ background: roleColor.bg }}>
+                                      <roleColor.icon
+                                        size={10}
+                                        style={{ color: roleColor.color }}
+                                      />
+                                    </div>
+                                    <span>{ROLE_LABELS[r]}</span>
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
                       )}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
-                      style={{ color: C.muted }}
-                      tabIndex={-1}>
-                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
                   </div>
-                </div>
 
-                {/* Send Credentials Toggle */}
-                <Controller
-                  name="sendCredentials"
-                  control={control}
-                  render={({ field }) => (
-                    <button
-                      type="button"
-                      onClick={() => field.onChange(!field.value)}
-                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors"
+                  {/* Placement Section - Only shown for IMPLANT role */}
+                  {selectedRole === "IMPLANT" && (
+                    <div
+                      className="rounded-2xl p-5 mt-2"
                       style={{
-                        background: field.value ? `${C.green}12` : "#F5F4EF",
-                        border: `1px solid ${field.value ? C.green : C.border}`,
+                        background: "#F5F4EF",
+                        border: `1px solid #e2e8f0`,
                       }}>
-                      <div className="flex items-center gap-2.5">
-                        <Send
-                          size={14}
-                          style={{ color: field.value ? C.green : C.muted }}
-                        />
-                        <div className="text-left">
-                          <p
-                            className="text-sm font-medium"
-                            style={{
-                              color: field.value ? "#2d5a1b" : C.dark,
-                            }}>
-                            Email credentials to user
-                          </p>
-                          <p className="text-[11px]" style={{ color: C.muted }}>
-                            {field.value
-                              ? "User will receive login details immediately"
-                              : "Toggle to send login details via email"}
-                          </p>
+                      <p className="text-xs font-semibold mb-3 flex items-center gap-1 text-slate-700">
+                        <MapPin size={12} /> Step 2b — Placement Location *
+                      </p>
+
+                      {selectedPlacement ? (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                              style={{ background: `${SKY_BLUE}18` }}>
+                              <Building2
+                                size={16}
+                                style={{ color: SKY_BLUE }}
+                              />
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">
+                                {selectedPlacement.name}
+                              </p>
+                              {selectedPlacement.address && (
+                                <p className="text-[10px] text-slate-500">
+                                  {selectedPlacement.address}
+                                </p>
+                              )}
+                              {selectedPlacement.contactPerson && (
+                                <p className="text-[10px] flex items-center gap-1 mt-0.5 text-slate-500">
+                                  <UserCircle2 size={8} />{" "}
+                                  {selectedPlacement.contactPerson}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRemovePlacement}
+                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-red-50 text-red-500">
+                            <Trash2 size={12} /> Remove
+                          </button>
                         </div>
-                      </div>
-                      <div
-                        className="w-10 h-5 rounded-full relative"
-                        style={{
-                          background: field.value ? C.green : C.border,
-                        }}>
-                        <div
-                          className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
-                          style={{
-                            left: field.value ? "calc(100% - 18px)" : "2px",
-                          }}
-                        />
-                      </div>
-                    </button>
+                      ) : (
+                        <div className="relative">
+                          {showPlacementPicker ? (
+                            <div>
+                              <div className="relative mb-2">
+                                <Search
+                                  size={13}
+                                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                                />
+                                <Input
+                                  autoFocus
+                                  value={clientSearch}
+                                  onChange={(e) =>
+                                    setClientSearch(e.target.value)
+                                  }
+                                  placeholder="Search clients…"
+                                  className="pl-9 h-9 rounded-xl text-sm bg-white"
+                                />
+                              </div>
+                              <div
+                                className="rounded-xl overflow-hidden max-h-60 overflow-y-auto border"
+                                style={{
+                                  background: "#fff",
+                                  borderColor: "#e2e8f0",
+                                }}>
+                                {filteredClients.length === 0 ? (
+                                  <p className="text-xs text-center py-6 text-slate-500">
+                                    No clients found
+                                  </p>
+                                ) : (
+                                  filteredClients.map((client) => (
+                                    <button
+                                      key={client.id}
+                                      type="button"
+                                      onClick={() =>
+                                        handleSelectPlacement(client)
+                                      }
+                                      className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#F5F4EF] text-left border-b last:border-0"
+                                      style={{ borderColor: "#e2e8f0" }}>
+                                      <div
+                                        className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                                        style={{ background: "#16a34a18" }}>
+                                        <Building2
+                                          size={12}
+                                          style={{ color: "#16a34a" }}
+                                        />
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-medium truncate text-slate-900">
+                                          {client.name}
+                                        </p>
+                                        {client.address && (
+                                          <p className="text-[10px] truncate text-slate-500">
+                                            {client.address}
+                                          </p>
+                                        )}
+                                        {client.contactPerson && (
+                                          <p className="text-[10px] truncate text-slate-500">
+                                            Contact: {client.contactPerson}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setShowPlacementPicker(false)}
+                                className="mt-2 text-xs font-medium text-slate-500">
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setShowPlacementPicker(true)}
+                              className="w-full flex items-center gap-2 justify-center h-10 rounded-xl text-sm font-medium transition-colors hover:bg-white border-dashed border-2"
+                              style={{
+                                color: "#64748b",
+                                borderColor: "#e2e8f0",
+                              }}>
+                              <MapPin size={14} /> Select Client Location
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {errors.placementId && (
+                        <p className="text-xs text-red-500 mt-2">
+                          {errors.placementId.message}
+                        </p>
+                      )}
+                    </div>
                   )}
-                />
+                </div>
+              </div>
+
+              {/* Password Section */}
+              <div>
+                <p className="text-xs font-semibold mb-3 text-slate-700">
+                  Step 3 — Set Password
+                </p>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-medium text-slate-700">
+                        Password *
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={handleAutoGenerate}
+                        className="flex items-center gap-1 text-xs font-medium transition-colors"
+                        style={{ color: SKY_BLUE }}>
+                        <RefreshCw size={11} /> Auto-generate
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock
+                        size={14}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+                      <Controller
+                        name="password"
+                        control={control}
+                        render={({ field }) => (
+                          <Input
+                            {...field}
+                            type={showPassword ? "text" : "password"}
+                            placeholder="••••••••••••"
+                            className="h-10 rounded-xl text-sm pl-9 pr-10 font-mono"
+                          />
+                        )}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors text-slate-400"
+                        tabIndex={-1}>
+                        {showPassword ? (
+                          <EyeOff size={14} />
+                        ) : (
+                          <Eye size={14} />
+                        )}
+                      </button>
+                    </div>
+                    {errors.password && (
+                      <p className="text-xs text-red-500">
+                        {errors.password.message}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Send Credentials Toggle */}
+                  <Controller
+                    name="sendCredentials"
+                    control={control}
+                    render={({ field }) => (
+                      <button
+                        type="button"
+                        onClick={() => field.onChange(!field.value)}
+                        className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors"
+                        style={{
+                          background: field.value ? "#16a34a12" : "#F5F4EF",
+                          border: `1px solid ${field.value ? "#16a34a" : "#e2e8f0"}`,
+                        }}>
+                        <div className="flex items-center gap-2.5">
+                          <Send
+                            size={14}
+                            style={{
+                              color: field.value ? "#16a34a" : "#64748b",
+                            }}
+                          />
+                          <div className="text-left">
+                            <p
+                              className="text-sm font-medium"
+                              style={{
+                                color: field.value ? "#2d5a1b" : "#0f172a",
+                              }}>
+                              Email credentials to user
+                            </p>
+                            <p className="text-[11px] text-slate-500">
+                              {field.value
+                                ? "User will receive login details immediately"
+                                : "Toggle to send login details via email"}
+                            </p>
+                          </div>
+                        </div>
+                        <div
+                          className="w-10 h-5 rounded-full relative"
+                          style={{
+                            background: field.value ? "#16a34a" : "#cbd5e1",
+                          }}>
+                          <div
+                            className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
+                            style={{
+                              left: field.value ? "calc(100% - 18px)" : "2px",
+                            }}
+                          />
+                        </div>
+                      </button>
+                    )}
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="px-7 pb-7 flex gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              className="flex-1 rounded-xl">
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={isSaving}
-              className="flex-1 rounded-xl text-white font-semibold"
-              style={{
-                background: "linear-gradient(135deg, #1a3a5c 0%, #1e6ea6 100%)",
-              }}>
-              {isSaving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                "Create Account"
-              )}
-            </Button>
-          </div>
-        </form>
+            <div className="sticky bottom-0 bg-white pt-6 mt-6 border-t flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isSaving}
+                onClick={handleClose}
+                className="flex-1 rounded-xl h-11">
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSaving}
+                className="flex-1 rounded-xl h-11 text-white font-semibold"
+                style={{ background: SKY_BLUE }}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.background = "#0591c0")
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.background = SKY_BLUE)
+                }>
+                {isSaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Create Account"
+                )}
+              </Button>
+            </div>
+          </form>
+        </ScrollArea>
       </SheetContent>
     </Sheet>
   );
@@ -992,44 +1254,53 @@ function EditAccountSheet({
     watch,
     formState: { errors },
   } = useForm<EditAccountFormData>({
-    //@ts-ignore - zodResolver types are messed up
     resolver: zodResolver(editAccountSchema) as any,
-    values: account
-      ? {
-          name: account.name,
-          email: account.email,
-          role: account.role,
-          staffId: account.staffId ?? null,
-          placementId: account.staffPlacementId ?? null,
-          password: "",
-          sendCredentials: false,
-        }
-      : {
-          name: "",
-          email: "",
-          role: "DRIVER",
-          staffId: null,
-          placementId: null,
-          password: "",
-          sendCredentials: false,
-        },
+    defaultValues: {
+      name: "",
+      email: "",
+      role: "DRIVER",
+      staffId: null,
+      placementId: null,
+      password: "",
+      sendCredentials: false,
+      isActive: true,
+    },
   });
 
   const selectedRole = watch("role");
 
+  // ✅ Fix: Reset form when account changes and properly set all values
   useEffect(() => {
-    if (account && account.staffId) {
-      const found = staffOptions.find((s) => s.id === account.staffId);
-      setLinkedStaff(found ?? null);
+    if (account) {
+      // Reset the form with account data
+      reset({
+        name: account.name,
+        email: account.email,
+        role: account.role,
+        staffId: account.staffId ?? null,
+        placementId: account.staffPlacementId ?? null,
+        password: "",
+        sendCredentials: false,
+        isActive: account.isActive ?? true,
+      });
+
+      // Find and set linked staff
+      if (account.staffId) {
+        const found = staffOptions.find((s) => s.id === account.staffId);
+        setLinkedStaff(found ?? null);
+      } else {
+        setLinkedStaff(null);
+      }
+
+      // Find and set placement
       if (account.staffPlacementId) {
         const client = clients.find((c) => c.id === account.staffPlacementId);
         setSelectedPlacement(client ?? null);
-        setValue("placementId", client?.id ?? null);
+      } else {
+        setSelectedPlacement(null);
       }
-    } else {
-      setLinkedStaff(null);
     }
-  }, [account, staffOptions, clients, setValue]);
+  }, [account, staffOptions, clients, reset]); // ✅ Add reset to dependencies
 
   useEffect(() => {
     // Reset placement when role changes from IMPLANT to something else
@@ -1042,6 +1313,7 @@ function EditAccountSheet({
   function handleClose() {
     reset();
     setChangePassword(false);
+    setLinkedStaff(null);
     setSelectedPlacement(null);
     setShowPlacementPicker(false);
     setClientSearch("");
@@ -1051,19 +1323,32 @@ function EditAccountSheet({
   function handleLinkStaff(s: StaffOption) {
     setLinkedStaff(s);
     setValue("staffId", s.id);
+
+    // ✅ Prefill the role from the staff member
+    if (s.role) {
+      setValue("role", s.role);
+    }
+
+    // ✅ Prefill placement if the staff has one
     if (s.placementId) {
       const client = clients.find((c) => c.id === s.placementId);
       if (client) {
         setSelectedPlacement(client);
         setValue("placementId", client.id);
       }
+    } else {
+      // If staff has no placement, clear it
+      setSelectedPlacement(null);
+      setValue("placementId", null);
     }
     setShowStaffPicker(false);
+    setStaffSearch("");
   }
 
   function handleUnlink() {
     setLinkedStaff(null);
     setValue("staffId", null);
+    setValue("role", "DRIVER"); // Reset to default
     setValue("placementId", null);
     setSelectedPlacement(null);
   }
@@ -1114,317 +1399,376 @@ function EditAccountSheet({
       false,
   );
 
+  const filteredStaff = staffOptions.filter((s) =>
+    s.name.toLowerCase().includes(staffSearch.toLowerCase()),
+  );
+
   return (
     <Sheet open={open} onOpenChange={(o) => !o && !isSaving && handleClose()}>
-      <SheetContent
-        className="w-[460px] sm:w-[520px] overflow-y-auto !p-0"
-        style={{ fontFamily: "'Inter', sans-serif" }}>
-        <div
-          className="px-7 py-6"
-          style={{ borderBottom: `1px solid ${C.border}` }}>
-          <SheetTitle className="text-lg font-bold">Edit Account</SheetTitle>
-          <SheetDescription className="mt-1 text-sm">
-            {account ? `Editing account for ${account.name}.` : ""}
-          </SheetDescription>
+      <SheetContent className="w-[600px] sm:max-w-[600px] overflow-y-auto !p-0">
+        <div className="sticky top-0 bg-white z-10 px-7 py-5 border-b flex items-center justify-between">
+          <div>
+            <SheetTitle className="text-xl font-bold text-slate-900">
+              Edit Account
+            </SheetTitle>
+            <SheetDescription className="mt-1 text-sm text-slate-500">
+              {account ? `Editing account for ${account.name}.` : ""}
+            </SheetDescription>
+          </div>
+          <SheetClose className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100">
+            <X className="h-5 w-5" />
+            <span className="sr-only">Close</span>
+          </SheetClose>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} noValidate>
-          <div className="px-7 py-6 space-y-5">
-            {/* Link Staff Section */}
-            <div
-              className="rounded-2xl p-4"
-              style={{
-                background: "#F5F4EF",
-                border: `1px solid ${C.border}`,
-              }}>
-              <p className="text-[10px] font-semibold uppercase tracking-widest mb-3">
-                Linked Staff Member
-              </p>
-              {linkedStaff ? (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="w-9 h-9">
-                      <AvatarFallback
-                        style={{ background: avatarColor(linkedStaff.id) }}>
-                        {getInitials(linkedStaff.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="text-sm font-semibold">
-                        {linkedStaff.name}
-                      </p>
-                      {linkedStaff.placementName && (
-                        <p className="text-[10px] flex items-center gap-1 text-muted-foreground">
-                          <MapPin size={8} /> Current:{" "}
-                          {linkedStaff.placementName}
+        <ScrollArea className="h-[calc(100vh-120px)] px-7 py-6">
+          <form onSubmit={handleSubmit(onSubmit)} noValidate>
+            <div className="space-y-6">
+              {/* Link Staff Section */}
+              <div
+                className="rounded-2xl p-5"
+                style={{
+                  background: "#F5F4EF",
+                  border: `1px solid #e2e8f0`,
+                }}>
+                <p className="text-xs font-semibold mb-3 text-slate-700">
+                  Linked Staff Member
+                </p>
+
+                {linkedStaff ? (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="w-10 h-10">
+                        <AvatarFallback
+                          className="text-white text-sm font-bold"
+                          style={{ background: avatarColor(linkedStaff.id) }}>
+                          {getInitials(linkedStaff.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {linkedStaff.name}
                         </p>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleUnlink}
-                    className="text-xs font-medium text-red-500 flex items-center gap-1">
-                    <Unlink size={12} /> Unlink
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowStaffPicker(true)}
-                  className="w-full h-10 border-dashed border-2 rounded-xl text-sm font-medium">
-                  Link Staff Member
-                </button>
-              )}
-              {showStaffPicker && (
-                <div className="mt-3 bg-white p-2 rounded-lg border max-h-60 overflow-y-auto">
-                  <Input
-                    value={staffSearch}
-                    onChange={(e) => setStaffSearch(e.target.value)}
-                    placeholder="Search staff..."
-                    className="mb-2 h-8 text-sm"
-                  />
-                  {staffOptions
-                    .filter((s) =>
-                      s.name.toLowerCase().includes(staffSearch.toLowerCase()),
-                    )
-                    .map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => handleLinkStaff(s)}
-                        className="w-full text-left p-2 hover:bg-slate-50 text-xs">
-                        <div className="font-medium">{s.name}</div>
-                        {s.placementName && (
-                          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                            <MapPin size={8} /> {s.placementName}
-                          </div>
-                        )}
-                      </button>
-                    ))}
-                </div>
-              )}
-            </div>
-
-            {/* Account Details */}
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label
-                  className="text-xs font-semibold uppercase tracking-wider"
-                  style={{ color: C.muted }}>
-                  Full Name
-                </Label>
-                <Controller
-                  name="name"
-                  control={control}
-                  render={({ field }) => (
-                    <Input {...field} className="h-10 rounded-xl" />
-                  )}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label
-                  className="text-xs font-semibold uppercase tracking-wider"
-                  style={{ color: C.muted }}>
-                  Email Address
-                </Label>
-                <Controller
-                  name="email"
-                  control={control}
-                  render={({ field }) => (
-                    <Input {...field} className="h-10 rounded-xl" />
-                  )}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label
-                  className="text-xs font-semibold uppercase tracking-wider"
-                  style={{ color: C.muted }}>
-                  Role
-                </Label>
-                <Controller
-                  name="role"
-                  control={control}
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger className="h-10 rounded-xl">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ALL_ROLES.map((r) => (
-                          <SelectItem key={r} value={r}>
-                            {ROLE_LABELS[r]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </div>
-
-              {/* Placement Section - Only shown for IMPLANT role */}
-              {selectedRole === "IMPLANT" && (
-                <div
-                  className="rounded-2xl p-4 mt-2"
-                  style={{
-                    background: "#F5F4EF",
-                    border: `1px solid ${C.border}`,
-                  }}>
-                  <p
-                    className="text-[10px] font-semibold uppercase tracking-widest mb-3 flex items-center gap-1"
-                    style={{ color: C.muted }}>
-                    <MapPin size={12} /> Placement Location *
-                  </p>
-
-                  {selectedPlacement ? (
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                          style={{ background: `${C.blue}18` }}>
-                          <Building2 size={16} style={{ color: C.blue }} />
-                        </div>
-                        <div>
-                          <p
-                            className="text-sm font-semibold"
-                            style={{ color: C.dark }}>
-                            {selectedPlacement.name}
+                        {linkedStaff.role && (
+                          <p className="text-[10px] flex items-center gap-1 mt-0.5 text-slate-500">
+                            <ShieldCheck size={8} /> Role:{" "}
+                            {ROLE_LABELS[linkedStaff.role]}
                           </p>
-                          {selectedPlacement.address && (
-                            <p
-                              className="text-[10px]"
-                              style={{ color: C.muted }}>
-                              {selectedPlacement.address}
-                            </p>
-                          )}
-                          {selectedPlacement.contactPerson && (
-                            <p
-                              className="text-[10px] flex items-center gap-1 mt-0.5"
-                              style={{ color: C.muted }}>
-                              <UserCircle2 size={8} />{" "}
-                              {selectedPlacement.contactPerson}
-                            </p>
-                          )}
-                        </div>
+                        )}
+                        {linkedStaff.placementName && (
+                          <p className="text-[10px] flex items-center gap-1 text-slate-500">
+                            <MapPin size={8} /> Current:{" "}
+                            {linkedStaff.placementName}
+                          </p>
+                        )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleRemovePlacement}
-                        className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-red-50"
-                        style={{ color: C.red }}>
-                        <Trash2 size={12} /> Remove
-                      </button>
                     </div>
-                  ) : (
-                    <div className="relative">
-                      {showPlacementPicker ? (
-                        <div>
-                          <div className="relative mb-2">
-                            <Search
-                              size={13}
-                              className="absolute left-3 top-1/2 -translate-y-1/2"
-                              style={{ color: C.muted }}
-                            />
-                            <Input
-                              autoFocus
-                              value={clientSearch}
-                              onChange={(e) => setClientSearch(e.target.value)}
-                              placeholder="Search clients…"
-                              className="pl-9 h-9 rounded-xl text-sm bg-white"
-                            />
-                          </div>
-                          <div
-                            className="rounded-xl overflow-hidden max-h-60 overflow-y-auto"
-                            style={{
-                              background: "#fff",
-                              border: `1px solid ${C.border}`,
-                            }}>
-                            {filteredClients.length === 0 ? (
-                              <p
-                                className="text-xs text-center py-6"
-                                style={{ color: C.muted }}>
-                                No clients found
-                              </p>
-                            ) : (
-                              filteredClients.map((client) => (
-                                <button
-                                  key={client.id}
-                                  type="button"
-                                  onClick={() => handleSelectPlacement(client)}
-                                  className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#F5F4EF] text-left"
-                                  style={{
-                                    borderBottom: `1px solid ${C.border}`,
-                                  }}>
-                                  <div
-                                    className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                                    style={{ background: `${C.green}18` }}>
-                                    <Building2
-                                      size={12}
-                                      style={{ color: C.green }}
-                                    />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p
-                                      className="text-sm font-medium truncate"
-                                      style={{ color: C.dark }}>
-                                      {client.name}
-                                    </p>
-                                    {client.address && (
-                                      <p
-                                        className="text-[10px] truncate"
-                                        style={{ color: C.muted }}>
-                                        {client.address}
-                                      </p>
-                                    )}
-                                    {client.contactPerson && (
-                                      <p
-                                        className="text-[10px] truncate"
-                                        style={{ color: C.muted }}>
-                                        Contact: {client.contactPerson}
-                                      </p>
-                                    )}
-                                  </div>
-                                </button>
-                              ))
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setShowPlacementPicker(false)}
-                            className="mt-2 text-xs font-medium"
-                            style={{ color: C.muted }}>
-                            Cancel
-                          </button>
+                    <button
+                      type="button"
+                      onClick={handleUnlink}
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-red-50 text-red-500">
+                      <Unlink size={12} /> Unlink
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    {showStaffPicker ? (
+                      <div>
+                        <div className="relative mb-2">
+                          <Search
+                            size={13}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                          />
+                          <Input
+                            autoFocus
+                            value={staffSearch}
+                            onChange={(e) => setStaffSearch(e.target.value)}
+                            placeholder="Search staff by name…"
+                            className="pl-9 h-9 rounded-xl text-sm bg-white"
+                          />
                         </div>
-                      ) : (
+                        <div
+                          className="rounded-xl overflow-hidden max-h-44 overflow-y-auto border"
+                          style={{
+                            background: "#fff",
+                            borderColor: "#e2e8f0",
+                          }}>
+                          {filteredStaff.length === 0 ? (
+                            <p className="text-xs text-center py-6 text-slate-500">
+                              No staff found
+                            </p>
+                          ) : (
+                            filteredStaff.map((s) => (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => handleLinkStaff(s)}
+                                className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[#F5F4EF] text-left border-b last:border-0"
+                                style={{ borderColor: "#e2e8f0" }}>
+                                <Avatar className="w-7 h-7">
+                                  <AvatarFallback
+                                    className="text-white text-[10px] font-bold"
+                                    style={{ background: avatarColor(s.id) }}>
+                                    {getInitials(s.name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium truncate text-slate-900">
+                                    {s.name}
+                                  </p>
+                                  <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                    {s.role && (
+                                      <span className="flex items-center gap-0.5">
+                                        <ShieldCheck size={8} />
+                                        {ROLE_LABELS[s.role]}
+                                      </span>
+                                    )}
+                                    {s.placementName && (
+                                      <span className="flex items-center gap-0.5">
+                                        <MapPin size={8} />
+                                        {s.placementName}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </div>
                         <button
                           type="button"
-                          onClick={() => setShowPlacementPicker(true)}
-                          className="w-full flex items-center gap-2 justify-center h-10 rounded-xl text-sm font-medium transition-colors hover:bg-white border-dashed border-2"
-                          style={{
-                            color: C.muted,
-                            borderColor: C.border,
-                          }}>
-                          <MapPin size={14} /> Select Client Location
+                          onClick={() => setShowStaffPicker(false)}
+                          className="mt-2 text-xs font-medium text-slate-500">
+                          Cancel
                         </button>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowStaffPicker(true)}
+                        className="w-full flex items-center gap-2 justify-center h-10 rounded-xl text-sm font-medium transition-colors hover:bg-white border-dashed border-2"
+                        style={{
+                          color: "#64748b",
+                          borderColor: "#e2e8f0",
+                        }}>
+                        <Link2 size={14} /> Link a Staff Member
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
 
-                  {errors.placementId && (
-                    <p className="text-xs text-red-500 mt-2">
-                      {errors.placementId.message}
-                    </p>
-                  )}
+              {/* Account Details */}
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-700">
+                    Full Name *
+                  </Label>
+                  <Controller
+                    name="name"
+                    control={control}
+                    render={({ field }) => (
+                      <Input {...field} className="h-10 rounded-xl text-sm" />
+                    )}
+                  />
                 </div>
-              )}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-700">
+                    Email Address *
+                  </Label>
+                  <Controller
+                    name="email"
+                    control={control}
+                    render={({ field }) => (
+                      <Input {...field} className="h-10 rounded-xl text-sm" />
+                    )}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-700">
+                    Role *
+                  </Label>
+                  <Controller
+                    name="role"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}>
+                        <SelectTrigger className="h-10 rounded-xl text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ALL_ROLES.map((r) => (
+                            <SelectItem key={r} value={r}>
+                              {ROLE_LABELS[r]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+
+                {/* Placement Section - Only shown for IMPLANT role */}
+                {selectedRole === "IMPLANT" && (
+                  <div
+                    className="rounded-2xl p-5 mt-2"
+                    style={{
+                      background: "#F5F4EF",
+                      border: `1px solid #e2e8f0`,
+                    }}>
+                    <p className="text-xs font-semibold mb-3 flex items-center gap-1 text-slate-700">
+                      <MapPin size={12} /> Placement Location *
+                    </p>
+
+                    {selectedPlacement ? (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                            style={{ background: `${SKY_BLUE}18` }}>
+                            <Building2 size={16} style={{ color: SKY_BLUE }} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {selectedPlacement.name}
+                            </p>
+                            {selectedPlacement.address && (
+                              <p className="text-[10px] text-slate-500">
+                                {selectedPlacement.address}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemovePlacement}
+                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-red-50 text-red-500">
+                          <Trash2 size={12} /> Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        {showPlacementPicker ? (
+                          <div>
+                            <div className="relative mb-2">
+                              <Search
+                                size={13}
+                                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                              />
+                              <Input
+                                autoFocus
+                                value={clientSearch}
+                                onChange={(e) =>
+                                  setClientSearch(e.target.value)
+                                }
+                                placeholder="Search clients…"
+                                className="pl-9 h-9 rounded-xl text-sm bg-white"
+                              />
+                            </div>
+                            <div
+                              className="rounded-xl overflow-hidden max-h-60 overflow-y-auto border"
+                              style={{
+                                background: "#fff",
+                                borderColor: "#e2e8f0",
+                              }}>
+                              {filteredClients.length === 0 ? (
+                                <p className="text-xs text-center py-6 text-slate-500">
+                                  No clients found
+                                </p>
+                              ) : (
+                                filteredClients.map((client) => (
+                                  <button
+                                    key={client.id}
+                                    type="button"
+                                    onClick={() =>
+                                      handleSelectPlacement(client)
+                                    }
+                                    className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#F5F4EF] text-left border-b last:border-0"
+                                    style={{ borderColor: "#e2e8f0" }}>
+                                    <div
+                                      className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                                      style={{ background: "#16a34a18" }}>
+                                      <Building2
+                                        size={12}
+                                        style={{ color: "#16a34a" }}
+                                      />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-medium truncate text-slate-900">
+                                        {client.name}
+                                      </p>
+                                      {client.address && (
+                                        <p className="text-[10px] truncate text-slate-500">
+                                          {client.address}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowPlacementPicker(false)}
+                              className="mt-2 text-xs font-medium text-slate-500">
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setShowPlacementPicker(true)}
+                            className="w-full flex items-center gap-2 justify-center h-10 rounded-xl text-sm font-medium transition-colors hover:bg-white border-dashed border-2"
+                            style={{
+                              color: "#64748b",
+                              borderColor: "#e2e8f0",
+                            }}>
+                            <MapPin size={14} /> Select Client Location
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {errors.placementId && (
+                      <p className="text-xs text-red-500 mt-2">
+                        {errors.placementId.message}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Active Status Toggle */}
+                <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50">
+                  <Controller
+                    name="isActive"
+                    control={control}
+                    render={({ field }) => (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={field.value}
+                          onChange={(e) => field.onChange(e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-300"
+                          style={{ accentColor: SKY_BLUE }}
+                        />
+                        <span className="text-sm font-medium text-slate-700">
+                          Account is active
+                        </span>
+                      </label>
+                    )}
+                  />
+                </div>
+              </div>
 
               {/* Password Change */}
               <div className="pt-2 space-y-3">
                 <button
                   type="button"
                   onClick={() => setChangePassword(!changePassword)}
-                  className="flex items-center gap-2 text-sm font-medium text-blue-600">
+                  className="flex items-center gap-2 text-sm font-medium"
+                  style={{ color: SKY_BLUE }}>
                   <Key size={14} />{" "}
                   {changePassword
                     ? "Cancel Password Change"
@@ -1435,12 +1779,14 @@ function EditAccountSheet({
                   <>
                     <div className="relative animate-in fade-in slide-in-from-top-2">
                       <div className="flex items-center justify-between mb-1">
-                        <Label className="text-xs">New Password</Label>
+                        <Label className="text-xs font-medium text-slate-700">
+                          New Password
+                        </Label>
                         <button
                           type="button"
                           onClick={handleAutoGenerate}
                           className="flex items-center gap-1 text-xs font-medium transition-colors"
-                          style={{ color: C.blue }}>
+                          style={{ color: SKY_BLUE }}>
                           <RefreshCw size={11} /> Auto-generate
                         </button>
                       </div>
@@ -1451,7 +1797,7 @@ function EditAccountSheet({
                           <Input
                             {...field}
                             type={showPassword ? "text" : "password"}
-                            className="h-10 rounded-xl pr-10"
+                            className="h-10 rounded-xl pr-10 text-sm"
                             placeholder="Enter new password"
                           />
                         )}
@@ -1459,7 +1805,7 @@ function EditAccountSheet({
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 bottom-3">
+                        className="absolute right-3 bottom-3 text-slate-400">
                         {showPassword ? (
                           <EyeOff size={14} />
                         ) : (
@@ -1478,27 +1824,25 @@ function EditAccountSheet({
                           onClick={() => field.onChange(!field.value)}
                           className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors"
                           style={{
-                            background: field.value
-                              ? `${C.green}12`
-                              : "#F5F4EF",
-                            border: `1px solid ${field.value ? C.green : C.border}`,
+                            background: field.value ? "#16a34a12" : "#F5F4EF",
+                            border: `1px solid ${field.value ? "#16a34a" : "#e2e8f0"}`,
                           }}>
                           <div className="flex items-center gap-2.5">
                             <Send
                               size={14}
-                              style={{ color: field.value ? C.green : C.muted }}
+                              style={{
+                                color: field.value ? "#16a34a" : "#64748b",
+                              }}
                             />
                             <div className="text-left">
                               <p
                                 className="text-sm font-medium"
                                 style={{
-                                  color: field.value ? "#2d5a1b" : C.dark,
+                                  color: field.value ? "#2d5a1b" : "#0f172a",
                                 }}>
                                 Email new password to user
                               </p>
-                              <p
-                                className="text-[11px]"
-                                style={{ color: C.muted }}>
+                              <p className="text-[11px] text-slate-500">
                                 {field.value
                                   ? "User will receive the new password via email"
                                   : "Toggle to send new password via email"}
@@ -1508,7 +1852,7 @@ function EditAccountSheet({
                           <div
                             className="w-10 h-5 rounded-full relative"
                             style={{
-                              background: field.value ? C.green : C.border,
+                              background: field.value ? "#16a34a" : "#cbd5e1",
                             }}>
                             <div
                               className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
@@ -1524,36 +1868,39 @@ function EditAccountSheet({
                 )}
               </div>
             </div>
-          </div>
 
-          <div className="px-7 pb-7 flex gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="flex-1 rounded-xl">
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={isSaving}
-              className="flex-1 rounded-xl text-white font-semibold"
-              style={{
-                background: "linear-gradient(135deg, #1a3a5c 0%, #1e6ea6 100%)",
-              }}>
-              {isSaving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                "Save Changes"
-              )}
-            </Button>
-          </div>
-        </form>
+            <div className="sticky bottom-0 bg-white pt-6 mt-6 border-t flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                className="flex-1 rounded-xl h-11">
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSaving}
+                className="flex-1 rounded-xl h-11 text-white font-semibold"
+                style={{ background: SKY_BLUE }}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.background = "#0591c0")
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.background = SKY_BLUE)
+                }>
+                {isSaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Save Changes"
+                )}
+              </Button>
+            </div>
+          </form>
+        </ScrollArea>
       </SheetContent>
     </Sheet>
   );
 }
-
 // ── Delete Dialog ─────────────────────────────────────────────────────────────
 
 function DeleteDialog({
@@ -1583,27 +1930,28 @@ function DeleteDialog({
     <Dialog open={open} onOpenChange={(o) => !o && !isDeleting && onClose()}>
       <DialogContent className="max-w-sm rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="text-base font-bold">
+          <DialogTitle className="text-base font-bold text-slate-900">
             Delete Account
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-slate-500">
             Are you sure you want to delete the account for{" "}
-            <strong style={{ color: C.dark }}>{account?.name}</strong>?
+            <strong className="text-slate-900">{account?.name}</strong>? This
+            cannot be undone.
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="gap-2 mt-2">
+        <DialogFooter className="gap-2 mt-4">
           <Button
             variant="outline"
             disabled={isDeleting}
             onClick={onClose}
-            className="rounded-xl">
+            className="rounded-xl flex-1">
             Cancel
           </Button>
           <Button
             onClick={handleConfirm}
             disabled={isDeleting}
-            className="rounded-xl text-white"
-            style={{ background: C.red }}>
+            className="rounded-xl flex-1 text-white"
+            style={{ background: "#ef4444" }}>
             {isDeleting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
@@ -1611,6 +1959,10 @@ function DeleteDialog({
             )}
           </Button>
         </DialogFooter>
+        <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100">
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </DialogClose>
       </DialogContent>
     </Dialog>
   );
@@ -1630,6 +1982,7 @@ export default function Accounts() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
+  const [viewingAccount, setViewingAccount] = useState<Account | null>(null);
 
   const fetchAccounts = useCallback(async () => {
     setIsLoading(true);
@@ -1753,6 +2106,7 @@ export default function Accounts() {
           staffId: data.staffId,
           ...(data.password ? { password: data.password } : {}),
           sendEmail: data.sendCredentials,
+          isActive: data.isActive,
         }),
       });
 
@@ -1849,6 +2203,9 @@ export default function Accounts() {
       if (sortKey === "placement") {
         va = a.placementName || "";
         vb = b.placementName || "";
+      } else if (sortKey === "lastLogin") {
+        va = a.lastLogin || "";
+        vb = b.lastLogin || "";
       } else {
         va = (a as any)[sortKey];
         vb = (b as any)[sortKey];
@@ -1860,97 +2217,76 @@ export default function Accounts() {
     });
   }, [accounts, search, roleFilter, sortKey, sortDir]);
 
+  const stats = {
+    total: accounts.length,
+    admins: accounts.filter((a) => ["SUPER_ADMIN", "MANAGER"].includes(a.role))
+      .length,
+    linked: accounts.filter((a) => !!a.staffId).length,
+    active: accounts.filter((a) => a.isActive).length,
+  };
+
   return (
-    <div
-      className="h-full overflow-auto px-6 pt-5 pb-6"
-      style={{ scrollbarGutter: "stable" }}>
-      <div
-        className="flex items-start justify-between mb-5"
-        style={{ animation: "fadeSlideUp 0.3s ease both" }}>
+    <div className="h-full overflow-auto px-6 pt-5 pb-6">
+      <div className="flex items-start justify-between mb-5">
         <div>
-          <p className="text-xs font-medium mb-1" style={{ color: C.muted }}>
-            {new Date().toDateString()}
+          <p className="text-xs font-medium mb-1 text-slate-500">
+            {new Date().toLocaleDateString("en-GB", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })}
           </p>
-          <h2
-            className="text-3xl font-bold tracking-tight"
-            style={{ color: C.dark }}>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900">
             Accounts
           </h2>
         </div>
         <Button
           onClick={() => setCreateOpen(true)}
           className="flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold text-white"
-          style={{
-            background: "linear-gradient(135deg, #1a3a5c 0%, #1e6ea6 100%)",
-            boxShadow: "0 2px 10px rgba(26,58,92,0.25)",
-          }}>
+          style={{ background: SKY_BLUE }}
+          onMouseOver={(e) => (e.currentTarget.style.background = "#0591c0")}
+          onMouseOut={(e) => (e.currentTarget.style.background = SKY_BLUE)}>
           <Plus size={15} /> New Account
         </Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-5">
-        {[
-          {
-            label: "Total Accounts",
-            value: accounts.length,
-            icon: UserCircle2,
-            color: "#1e6ea6",
-            bg: "#1e6ea618",
-          },
-          {
-            label: "Admins & Managers",
-            value: accounts.filter((a) =>
-              ["SUPER_ADMIN", "MANAGER"].includes(a.role),
-            ).length,
-            icon: ShieldCheck,
-            color: C.blue,
-            bg: `${C.blue}18`,
-          },
-          {
-            label: "Linked to Staff",
-            value: accounts.filter((a) => !!a.staffId).length,
-            icon: Link2,
-            color: C.green,
-            bg: `${C.green}18`,
-          },
-        ].map((card, i) => (
-          <div
-            key={card.label}
-            className="rounded-2xl p-4"
-            style={{
-              background: "#fff",
-              border: `1px solid ${C.border}`,
-              animation: `fadeSlideUp 0.4s ease ${i * 0.07}s both`,
-            }}>
-            <div className="flex items-start justify-between mb-3">
-              <p className="text-xs font-medium" style={{ color: C.muted }}>
-                {card.label}
-              </p>
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: card.bg }}>
-                <card.icon size={13} style={{ color: card.color }} />
-              </div>
-            </div>
-            <p className="text-2xl font-bold" style={{ color: C.dark }}>
-              {card.value}
-            </p>
-          </div>
-        ))}
+      <div className="grid grid-cols-4 gap-3 mb-5">
+        <StatCard
+          label="Total Accounts"
+          value={stats.total}
+          icon={UserCircle2}
+          color={SKY_BLUE}
+          bg={`${SKY_BLUE}18`}
+        />
+        <StatCard
+          label="Admins & Managers"
+          value={stats.admins}
+          icon={ShieldCheck}
+          color="#7A80F0"
+          bg="#7A80F018"
+        />
+        <StatCard
+          label="Linked to Staff"
+          value={stats.linked}
+          icon={Link2}
+          color="#16a34a"
+          bg="#16a34a18"
+        />
+        <StatCard
+          label="Active"
+          value={stats.active}
+          icon={CheckCircle2}
+          color="#16a34a"
+          bg="#16a34a18"
+        />
       </div>
 
-      <div
-        className="rounded-2xl p-4 mb-4 flex items-center gap-3"
-        style={{
-          background: "#fff",
-          border: `1px solid ${C.border}`,
-          animation: "fadeSlideUp 0.4s ease 0.2s both",
-        }}>
+      <div className="rounded-2xl p-4 mb-4 flex items-center gap-3 bg-white border border-slate-200">
         <div className="relative flex-1 max-w-sm">
           <Search
             size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2"
-            style={{ color: C.muted }}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
           />
           <Input
             value={search}
@@ -1960,7 +2296,7 @@ export default function Accounts() {
           />
         </div>
         <div className="flex items-center gap-2 ml-auto">
-          <Filter size={13} style={{ color: C.muted }} />
+          <Filter size={13} className="text-slate-500" />
           <Select
             value={roleFilter}
             onValueChange={(v) => setRoleFilter(v as any)}>
@@ -1979,19 +2315,11 @@ export default function Accounts() {
         </div>
       </div>
 
-      <div
-        className="rounded-2xl overflow-hidden min-h-[400px]"
-        style={{
-          background: "#fff",
-          border: `1px solid ${C.border}`,
-          animation: "fadeSlideUp 0.4s ease 0.28s both",
-        }}>
+      <div className="rounded-2xl overflow-hidden min-h-[400px] bg-white border border-slate-200">
         <div
-          className="grid px-5 py-3"
+          className="grid px-5 py-3 bg-[#FAFAF8] border-b border-slate-200"
           style={{
-            gridTemplateColumns: "2fr 1.8fr 1.2fr 1.5fr 1.2fr 52px",
-            borderBottom: `1px solid ${C.border}`,
-            background: "#FAFAF8",
+            gridTemplateColumns: "2fr 1.8fr 1.2fr 1.5fr 1fr 1fr 52px",
           }}>
           <SortHeader
             label="Account"
@@ -2022,12 +2350,15 @@ export default function Accounts() {
             onSort={handleSort}
           />
           <SortHeader
-            label="Created"
-            sortKey="createdAt"
+            label="Last Login"
+            sortKey="lastLogin"
             current={sortKey}
             dir={sortDir}
             onSort={handleSort}
           />
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+            Status
+          </span>
           <span />
         </div>
 
@@ -2035,46 +2366,42 @@ export default function Accounts() {
           <div className="flex flex-col items-center justify-center py-32 gap-3">
             <Loader2
               className="w-8 h-8 animate-spin"
-              style={{ color: C.blue }}
+              style={{ color: SKY_BLUE }}
             />
-            <p className="text-sm font-medium" style={{ color: C.muted }}>
+            <p className="text-sm font-medium text-slate-500">
               Loading accounts…
             </p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
-            <UserCircle2
-              size={28}
-              style={{ color: C.border }}
-              className="mb-4"
-            />
-            <h3 className="text-base font-bold mb-1" style={{ color: C.dark }}>
+            <UserCircle2 size={28} className="text-slate-300 mb-4" />
+            <h3 className="text-base font-bold mb-1 text-slate-900">
               No Accounts Found
             </h3>
-            <p
-              className="text-sm max-w-[280px] mb-6"
-              style={{ color: C.muted }}>
+            <p className="text-sm max-w-[280px] mb-6 text-slate-500">
               No user accounts found. Adjust filters or create a new one.
             </p>
             <Button
               onClick={() => setCreateOpen(true)}
               variant="outline"
-              className="rounded-xl h-9 px-5 border-[#c4dff0] text-[#1a3a5c]">
+              className="rounded-xl h-9 px-5"
+              style={{ borderColor: SKY_BLUE, color: SKY_BLUE }}>
               <Plus size={14} className="mr-2" /> New Account
             </Button>
           </div>
         ) : (
           filtered.map((a, i) => {
             const roleStyle = ROLE_COLORS[a.role];
+            const RoleIcon = roleStyle.icon;
             return (
               <div
                 key={a.id}
-                className="grid items-center px-5 py-3.5 transition-colors hover:bg-[#F5F4EF]"
+                onClick={() => setViewingAccount(a)}
+                className="grid items-center px-5 py-3.5 transition-colors hover:bg-[#F5F4EF] cursor-pointer"
                 style={{
-                  gridTemplateColumns: "2fr 1.8fr 1.2fr 1.5fr 1.2fr 52px",
+                  gridTemplateColumns: "2fr 1.8fr 1.2fr 1.5fr 1fr 1fr 52px",
                   borderBottom:
-                    i < filtered.length - 1 ? `1px solid ${C.border}` : "none",
-                  animation: `fadeSlideUp 0.3s ease ${0.3 + i * 0.04}s both`,
+                    i < filtered.length - 1 ? "1px solid #e2e8f0" : "none",
                 }}>
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar className="w-8 h-8 flex-shrink-0">
@@ -2086,29 +2413,25 @@ export default function Accounts() {
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <p
-                      className="text-sm font-semibold truncate"
-                      style={{ color: C.dark }}>
+                    <p className="text-sm font-semibold truncate text-slate-900">
                       {a.name}
                     </p>
                     {a.staffName && (
-                      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <p className="text-[11px] text-slate-500 flex items-center gap-1">
                         <Link2 size={9} />
                         {a.staffName}
                       </p>
                     )}
                   </div>
                 </div>
-                <p className="text-xs truncate" style={{ color: C.dark }}>
-                  {a.email}
-                </p>
-                <div>
-                  <span
-                    className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-semibold"
-                    style={{
-                      background: roleStyle.bg,
-                      color: roleStyle.color,
-                    }}>
+                <p className="text-xs truncate text-slate-900">{a.email}</p>
+                <div className="flex items-center gap-1.5">
+                  <div
+                    className="w-5 h-5 rounded flex items-center justify-center"
+                    style={{ background: roleStyle.bg }}>
+                    <RoleIcon size={10} style={{ color: roleStyle.color }} />
+                  </div>
+                  <span className="text-xs" style={{ color: roleStyle.color }}>
                     {ROLE_LABELS[a.role]}
                   </span>
                 </div>
@@ -2117,51 +2440,65 @@ export default function Accounts() {
                     <div className="flex items-start gap-1.5">
                       <MapPin
                         size={12}
-                        className="flex-shrink-0 mt-0.5"
-                        style={{ color: C.muted }}
+                        className="flex-shrink-0 mt-0.5 text-slate-400"
                       />
                       <div>
-                        <p
-                          className="text-xs font-medium"
-                          style={{ color: C.dark }}>
+                        <p className="text-xs font-medium text-slate-900">
                           {a.placementName}
                         </p>
                         {a.placementAddress && (
-                          <p className="text-[10px]" style={{ color: C.muted }}>
+                          <p className="text-[10px] text-slate-500">
                             {a.placementAddress}
                           </p>
                         )}
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs" style={{ color: C.muted }}>
-                      —
-                    </p>
+                    <p className="text-xs text-slate-400">—</p>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(a.createdAt).toLocaleDateString()}
+                <p className="text-xs text-slate-500">
+                  {a.lastLogin ? formatDate(a.lastLogin) : "Never"}
                 </p>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[#F0EFE9] text-muted-foreground">
-                      <MoreHorizontal size={15} />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-40 rounded-xl">
-                    <DropdownMenuItem
-                      onClick={() => setEditAccount(a)}
-                      className="text-xs cursor-pointer">
-                      <Pencil size={13} className="mr-2" /> Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => setDeleteTarget(a)}
-                      className="text-xs cursor-pointer text-red-500">
-                      <Trash2 size={13} className="mr-2" /> Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <div>
+                  <Badge
+                    className="text-[10px]"
+                    style={{
+                      background: a.isActive ? "#16a34a18" : "#ef444418",
+                      color: a.isActive ? "#16a34a" : "#ef4444",
+                    }}>
+                    {a.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[#F0EFE9] text-slate-500">
+                        <MoreHorizontal size={15} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-40 rounded-xl">
+                      <DropdownMenuItem
+                        onClick={() => setViewingAccount(a)}
+                        className="text-xs cursor-pointer">
+                        <Eye size={13} className="mr-2" /> View
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setEditAccount(a)}
+                        className="text-xs cursor-pointer">
+                        <Pencil size={13} className="mr-2" /> Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => setDeleteTarget(a)}
+                        className="text-xs cursor-pointer text-red-500 focus:text-red-500">
+                        <Trash2 size={13} className="mr-2" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             );
           })
@@ -2183,12 +2520,33 @@ export default function Accounts() {
         staffOptions={staffOptions}
         clients={clients}
       />
+      <AccountDetailModal
+        open={!!viewingAccount}
+        onClose={() => setViewingAccount(null)}
+        account={viewingAccount}
+      />
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         account={deleteTarget}
         onConfirm={handleDelete}
       />
+    </div>
+  );
+}
+
+function StatCard({ label, value, icon: Icon, color, bg }: any) {
+  return (
+    <div className="rounded-2xl p-4 bg-white border border-slate-200">
+      <div className="flex items-start justify-between mb-3">
+        <p className="text-xs font-medium text-slate-500">{label}</p>
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center"
+          style={{ background: bg }}>
+          <Icon size={13} style={{ color }} />
+        </div>
+      </div>
+      <p className="text-2xl font-bold text-slate-900">{value}</p>
     </div>
   );
 }
